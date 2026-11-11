@@ -1,27 +1,34 @@
-import { timingSafeEqual } from 'node:crypto'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
 import { SiwcFault } from './oauth.js'
 
 const path = '/auth/callback'
 const issuedId = /^oaiapp_[a-zA-Z0-9_-]{1,200}$/
+const privateHeaders = { 'Cache-Control': 'no-store', 'Connection': 'close', 'Referrer-Policy': 'no-referrer' }
 
 export async function listenForCallback(state: string, savedClient: string | undefined, signal: AbortSignal) {
   signal.throwIfAborted()
   let origin = ''
   let accepted = false
+  let browserHandoff: { path: string; destination: string } | undefined
   const { promise: result, resolve, reject } = Promise.withResolvers<{ clientId: string; code: string }>()
   result.catch(() => {})
   const server = createServer((request, response) => {
     const reply = (status: number, text: string) => response.writeHead(status, {
-      'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Connection': 'close',
-      'Referrer-Policy': 'no-referrer',
+      ...privateHeaders, 'Content-Type': 'text/plain; charset=utf-8',
     }).end(text)
     let url: URL
     try { url = new URL(request.url ?? '', origin) } catch { return reply(400, 'Invalid callback.') }
-    if (request.method !== 'GET' || url.origin !== origin || url.pathname !== path ||
-      request.headers.host !== url.host) {
+    if (request.method !== 'GET' || url.origin !== origin || request.headers.host !== url.host) {
       return reply(404, 'Not found.')
     }
+    if (browserHandoff && request.url === browserHandoff.path) {
+      if (accepted || signal.aborted) return reply(410, 'This sign-in attempt has ended.')
+      const { destination } = browserHandoff
+      browserHandoff = undefined
+      return response.writeHead(303, { ...privateHeaders, Location: destination }).end()
+    }
+    if (url.pathname !== path) return reply(404, 'Not found.')
     if (accepted || signal.aborted) return reply(410, 'This sign-in attempt has ended.')
     const param = (key: string) => {
       const values = url.searchParams.getAll(key)
@@ -80,7 +87,16 @@ export async function listenForCallback(state: string, savedClient: string | und
       abort()
       throw new SiwcFault('cancelled')
     }
-    return { redirect: origin + path, result, close }
+    return {
+      redirect: origin + path, result, close,
+      prepareBrowserHandoff(destination: URL) {
+        signal.throwIfAborted()
+        browserHandoff = {
+          path: '/auth/start/' + randomBytes(32).toString('hex'), destination: destination.href,
+        }
+        return new URL(browserHandoff.path, origin)
+      },
+    }
   } catch (error) {
     await close()
     throw error

@@ -5,6 +5,7 @@ import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import { Peer } from '@deepseek-ai/dsh-client-connection'
 import { validateTypertManifest } from '@deepseek-ai/dsh-typert-loader'
 import Registry from '@deepseek-ai/dsh-typert-registry'
+import * as host from '../../dist/index.js'
 import { TYPERT } from '../../dist/typert.js'
 import { canary, fixture, harness } from './fixtures.mjs'
 
@@ -48,5 +49,40 @@ test('the default Host view is offline and the sign-in command cannot contact an
   t.mock.method(globalThis, 'fetch', async () => assert.fail('Offline mode must not contact an endpoint'))
   await assert.rejects(accounts.login(), { code: 'offline' })
   assert.deepEqual(await ctx.llm.listModels('chatgpt-siwc'), [])
+  assert.equal(globalThis.fetch.mock.callCount(), 0)
+})
+
+test('the installed Host entry exposes sign-in only with an explicit supported profile option', async (t) => {
+  const { ctx, plugin } = await harness(t)
+  await plugin.dispose()
+  const registry = ctx.plugin(Registry)
+  const access = ctx.plugin(RemoteAccess)
+  const gateway = ctx.plugin(Gateway)
+  await Promise.all([registry, access, gateway])
+  const dispose = ctx.typert.register(validateTypertManifest(TYPERT.package, TYPERT))
+  const owner = new Peer(ctx, { principal: { kind: 'owner' } })
+  t.after(async () => {
+    await owner.dispose()
+    await dispose()
+    await gateway.dispose()
+    await access.dispose()
+    await registry.dispose()
+  })
+  t.mock.method(globalThis, 'fetch', async () => assert.fail('Reading the profile state must not contact an endpoint'))
+  const supported = ['darwin', 'linux'].includes(process.platform)
+  for (const [config, available] of [[{}, false], [{ enableLiveOAuth: 'true' }, false], [{ enableLiveOAuth: true }, supported]]) {
+    const mounted = ctx.plugin(host, config)
+    try {
+      await mounted
+      const result = await ctx.typertGateway.invoke({
+        peer: owner, namespace: 'chatgptSiwc', method: 'settings', args: { action: { type: 'read' } },
+      })
+      assert.deepEqual(result, {
+        ok: true, view: { available, accounts: [], active: null, authorizing: false, confirmPlan: false, models: null },
+      })
+    } finally {
+      await mounted.dispose()
+    }
+  }
   assert.equal(globalThis.fetch.mock.callCount(), 0)
 })

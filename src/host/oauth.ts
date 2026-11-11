@@ -112,7 +112,7 @@ export async function readJson(response: Response, code: FaultCode): Promise<unk
 
 export interface OAuthDependencies {
   fetch: typeof fetch
-  openBrowser(url: URL, signal: AbortSignal): Promise<void>
+  openBrowser(url: URL, signal: AbortSignal, prepareHandoff: () => URL): Promise<void>
   now?: () => number
   loginTimeout?: number
 }
@@ -252,7 +252,9 @@ export class OAuth {
       if (!issued) url.searchParams.set('agent_name_hint', 'DSH ChatGPT SIWC')
       if (previous?.tokens) url.searchParams.set('id_token_hint', previous.tokens.idToken)
       try {
-        const [result] = await Promise.all([callback.result, this.deps.openBrowser(url, attempt)])
+        const [result] = await Promise.all([
+          callback.result, this.deps.openBrowser(url, attempt, () => callback.prepareBrowserHandoff(url)),
+        ])
         const form = new URLSearchParams({
           grant_type: 'authorization_code',
           client_id: result.clientId,

@@ -36,7 +36,7 @@ const profile = applyEntryPatches([], [...bundlePatches, ...pluginPatch], warn)
 // public patch seam replaces a preset's config wholesale.
 const presets = profile.filter(row => row.name === '@deepseek-ai/dsh-agent-preset')
 assert.equal(presets.length, 4)
-const userPatch = [{ id: 'session-title-llm', disabled: true }]
+const userPatch = [{ id: 'session-title-llm', disabled: true }, { id: 'chatgpt-siwc', config: { enableLiveOAuth: true } }]
 for (const preset of presets) {
   const config = structuredClone(preset.config)
   const group = config.plugins.find(row => row.id === 'compaction')
@@ -54,6 +54,8 @@ assert.equal(result.find(row => row.id === 'session-title').disabled, undefined)
 assert.equal(result.find(row => row.id === 'compaction-basic').disabled, true)
 assert.equal(result.find(row => row.id === 'command-compact').disabled, true)
 assert.equal(result.find(row => row.id === 'chatgpt-siwc').name, '@local/dsh-chatgpt-siwc')
+assert.equal(profile.find(row => row.id === 'chatgpt-siwc').config, undefined)
+assert.deepEqual(result.find(row => row.id === 'chatgpt-siwc').config, { enableLiveOAuth: true })
 for (const preset of presets) {
   const updated = result.find(row => row.id === preset.id)
   const children = updated.config.plugins.find(row => row.id === 'compaction').config

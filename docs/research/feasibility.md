@@ -21,6 +21,7 @@
 2. 首选专用 `chatgpt-siwc` provider。保留 DSH 的上下文、持久会话、工具执行、审批、沙箱和单次 attempt 重试契约。
 3. 最小实现优先选经 P0 核对的官方 SDK 作为 Host 内部传输。保持低层调用与每 attempt 单次发送，在插件内限制请求字段，按 `response.completed` 判定成功。
 4. 批准最小实现时复核该 SDK 版本及维护状态。变更版本或改用直接 HTTP/SSE 时复跑相同协议用例。
+5. 系统浏览器交接复用 DSH 同版的 `@deepseek-ai/dsh-subprocess` 清理子进程环境。联机入口由隔离 profile 显式开启。[包清单](../../package.json) · [交接验证](../evidence/p4-candidate-2026-11-11.md)
 
 ## 验收入口
 

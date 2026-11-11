@@ -82,13 +82,50 @@ test('invalid ID claims, access resource, key source and issued IDs cannot commi
   }
 })
 
+test('the launcher URL stays opaque and hands off the authorization URL only once', async (t) => {
+  const { dependencies } = fixture()
+  const finishInFixture = dependencies.openBrowser
+  let launch
+  dependencies.openBrowser = async (authorization, signal, prepareHandoff) => {
+    launch = prepareHandoff()
+    assert.match(launch.href, /^http:\/\/127\.0\.0\.1:\d+\/auth\/start\/[a-f0-9]{64}$/)
+    assert.equal(launch.origin, new URL(authorization.searchParams.get('redirect_uri')).origin)
+    assert.equal((await fetch(launch, { method: 'HEAD', redirect: 'manual' })).status, 404)
+    const invalid = await fetch(launch.href + '?destination=https://example.invalid', { redirect: 'manual' })
+    assert.equal(invalid.status, 404)
+    assert.equal(invalid.headers.get('location'), null)
+    await invalid.body.cancel()
+    const attempts = await Promise.all([fetch(launch, { redirect: 'manual' }), fetch(launch, { redirect: 'manual' })])
+    assert.deepEqual(attempts.map(response => response.status).sort(), [303, 404])
+    for (const response of attempts) {
+      assert.equal(response.headers.get('location'), response.status === 303 ? authorization.href : null)
+      assert.equal(response.headers.get('cache-control'), 'no-store')
+      assert.equal(response.headers.get('referrer-policy'), 'no-referrer')
+      await response.body?.cancel()
+    }
+    await finishInFixture(authorization, signal, prepareHandoff)
+  }
+  const { accounts } = await harness(t, dependencies)
+  await accounts.login()
+  await assert.rejects(fetch(launch, { redirect: 'manual' }))
+  const first = launch.href
+  await accounts.login((await accounts.view()).active)
+  assert.notEqual(launch.href, first)
+  await assert.rejects(fetch(launch, { redirect: 'manual' }))
+})
+
 test('state mismatch, cancel, timeout and duplicate begin release a pending attempt', async (t) => {
   const { dependencies, state } = fixture()
   dependencies.loginTimeout = 450
   const { accounts } = await harness(t, dependencies)
   const { promise: opened, resolve } = Promise.withResolvers()
   const defaultOpen = dependencies.openBrowser
-  dependencies.openBrowser = async (...args) => { await defaultOpen(...args); resolve() }
+  let launch
+  dependencies.openBrowser = async (...args) => {
+    launch = args[2]()
+    await defaultOpen(...args)
+    resolve()
+  }
   state.callback = callback => callback.searchParams.set('state', 'wrong')
   const pending = accounts.login()
   await opened
@@ -98,6 +135,7 @@ test('state mismatch, cancel, timeout and duplicate begin release a pending atte
   await assert.rejects(pending, { code: 'cancelled' })
   assert.equal(state.requests.filter(request => request.url === endpoint).length, 0)
   await assert.rejects(fetch(state.callbackUrl))
+  await assert.rejects(fetch(launch, { redirect: 'manual' }))
   await assert.rejects(accounts.login(), { code: 'timeout' })
   state.callback = undefined
   await accounts.login()

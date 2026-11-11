@@ -9,6 +9,7 @@ import { OAuth } from './host/oauth.js'
 import type { OAuthDependencies } from './host/oauth.js'
 import { responses } from './host/responses.js'
 import { Settings } from './host/settings.js'
+import { localOAuth } from './host/system-browser.js'
 
 export const name = providerId
 export const inject = ['llm', 'authorization', 'credentials']
@@ -57,8 +58,12 @@ class ChatGptAdapter extends LlmAdapter {
   }
 }
 
-export function apply(ctx: Context): void {
-  attachAccounts(ctx)
+export interface Config {
+  enableLiveOAuth?: boolean
+}
+
+export function apply(ctx: Context, config?: Config): void {
+  attachAccounts(ctx, config?.enableLiveOAuth === true ? localOAuth() : undefined)
 }
 
 export function attachAccounts(ctx: Context, dependencies?: OAuthDependencies): Accounts {

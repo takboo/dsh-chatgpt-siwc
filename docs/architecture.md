@@ -1,6 +1,6 @@
 # 实施方案
 
-本文记录 P3 离线实现基线及 P4 工作树候选的设计。实际验证范围以[实施计划](implementation-plan.md)和[证据索引](evidence/README.md)为准。
+本文记录 provider 的实现设计。各宿主与候选包的实际验证范围见[实施计划](implementation-plan.md)和[证据索引](evidence/README.md)。
 
 ## 1. Seam 与模块职责
 
@@ -46,7 +46,7 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 1. 每个 `DSH_HOME` 首次生成稳定、不含 PII 的应用 host ID。独立保存注册记录及每个 profile 的活动注册选择。登出保留 host ID，迁移／重装语义需明确。
 2. 首登使用跨安装一致的真实 `agent_name_hint` 和入口 `dynamic_agent_client`；再授权用 issued ID，省略 name hint，可按官方要求发送保存的 login hints。每次生成 state、nonce、PKCE S256 verifier/challenge；请求 scopes 为 `openid profile email offline_access resource.invoke chatgpt.tokens.use.direct`，resource 为 `https://api.openai.com/v1`。
 3. 限 loopback callback，验证预期路径、state、一次性使用、超时、取消；在打开浏览器前绑定监听地址。callback 的 issued client ID 按官方格式接收，与此次授权上下文绑定。
-   P4 工作树候选在 macOS 或 Linux Host 收到 `enableLiveOAuth: true` 后使用系统浏览器。Host 把无查询参数的一次性回环地址交给系统启动器，再由回环服务把浏览器重定向到固定的授权端点。浏览器和 Host 在同一系统环境运行。[候选启用步骤](../test/README.md#p4-交互验收)
+   联机入口默认关闭。macOS 或 Linux Host 收到 `enableLiveOAuth: true` 后使用系统浏览器。Host 把无查询参数的一次性回环地址交给系统启动器，再由回环服务把浏览器重定向到固定的授权端点。浏览器和 Host 在同一系统环境运行。[启用步骤](../test/README.md#p4-交互验收)
 4. 按官方协议使用 issued ID 换取 token，以可信 discovery/JWKS 校验 ID token 的签名、issuer、audience、时效、nonce；audience 必须对应 issued ID，不是 dynamic_agent_client。允许的算法和 issuer 固定，不信任回调提供任意 JWKS URL。
 5. 校验 token response 的实际 granted scopes（不能信 callback scope）与 API resource；缺少直接推理能力不得将账号显示为 inference-ready。登录身份、可发现模型、可完成推理是三个状态。
 6. 持久化版本化 GrantRecord，包括 issued client ID、已验证的 `sub`、实际 scopes、access/refresh/ID token、到期时间及 generation。宿主 ID 独立保存在同一 `DSH_HOME`。登出清理 token，保留最小 account/client 映射，供同一工作区复测。公开状态只返回脱敏标签和状态。[注册复用规范](security.md#真实账号复测)

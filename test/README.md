@@ -10,7 +10,7 @@
 4. 联机来宾经本机 Clash TUN 出网。先用无凭据请求核对来宾 DNS 和 TLS，并用 Clash 连接记录或 TUN 接口证据确认同一请求经过 TUN。宿主路由或来宾能访问网页只作为预检。路径未确认时暂停联网验收。
 5. 一次性来宾结束时退出应用、停止并回收来宾，复查基线和实验室锁。共享基线和来宾磁盘快照不承载真实账号。
 
-联机步骤使用明确支持 `enableLiveOAuth` 的 P4 候选包。当前提交的 P3 实现用于离线复跑。候选包与源码快照的对应关系见[证据索引](../docs/evidence/README.md)。
+从当前源码按[构建与打包步骤](#p1-包骨架)生成 P4 候选包。联机步骤使用支持 `enableLiveOAuth` 的候选包。各历史实测的包摘要与源码快照见[证据索引](../docs/evidence/README.md)。
 
 在隔离 macOS 或 Linux Host 安装联机候选包后，把下面的行加入该 profile 的 `cordis.patch.yml`。若文件以空列表 `[]` 结束，用下面的列表替换 `[]`。保存后重启 Host。Linux 桌面需要可用的 `xdg-open` 和本机浏览器。`true` 为 YAML 布尔值。
 
