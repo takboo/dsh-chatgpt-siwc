@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+npm-cache/
+dist/
+coverage/
+artifacts/
+.cache/
+*.tsbuildinfo
+/*.tgz
+
+# Local DSH state and secrets
+/.dsh/
+/.local/
+.env
+.env.*
+!.env.example
+.credentials.yaml
+.credentials.yaml.*
+credentials.yaml
+credentials.yaml.*
+credentials.json
+credentials.json.*
+*.token
+
+# Logs and OS metadata
+*.log
+.DS_Store

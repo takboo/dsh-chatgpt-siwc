@@ -1,0 +1,8 @@
+{
+  "name": "@local/dsh-chatgpt-siwc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Planning workspace for a DSH Sign in with ChatGPT provider; not an installable bundle",
+  "license": "UNLICENSED"
+}
