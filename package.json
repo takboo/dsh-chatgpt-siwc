@@ -3,6 +3,75 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Planning workspace for a DSH Sign in with ChatGPT provider; not an installable bundle",
-  "license": "UNLICENSED"
+  "description": "Sign in with ChatGPT provider for DeepSeek Harness",
+  "license": "MIT",
+  "packageManager": "npm@11.20.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/takboo/dsh-chatgpt-siwc.git"
+  },
+  "engines": {
+    "dsh": "0.2.2-rc.1"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test --test-timeout=15000 test/p1/*.test.mjs",
+    "check:profile": "node test/p1/check-profile.mjs",
+    "check:pack": "node scripts/check-pack.mjs"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json"
+  ],
+  "icon": "./icon.svg",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-include": "1.1.0",
+    "@deepseek-ai/cordis-plugin-loader": "1.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-credentials-local": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-package-manifest": "0.2.2-rc.1",
+    "@types/node": "24.10.0",
+    "@types/react": "18.3.27",
+    "esbuild": "0.27.3",
+    "eslint": "10.14.0",
+    "react": "18.3.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.2",
+    "yaml": "2.9.0"
+  }
 }

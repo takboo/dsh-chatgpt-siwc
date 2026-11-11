@@ -33,7 +33,7 @@
 - `modifyRecord` 返回 undefined 意味保持原值；清 token 必须提交实际更新 payload。显式“忘记注册”才用 `deleteRecord` 删除该注册映射；删除、清 token 与并发刷新的顺序需在真实 backing 上证明，不能仅测内存 mutex。
 - 撤销按 [Accounts and sessions](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions.md)：从可信 discovery 获取 revocation_endpoint，以 form POST 发送 refresh token、`token_type_hint=refresh_token`、issued client_id。空 200（含 token 已无效）为成功；网络／5xx 可在 token 仍在且有界的窗口退避。未确认则完成本地清除，并显示“本地已退出，远端撤销未确认”，引导 ChatGPT Settings Disconnect。不可硬猜 endpoint，亦不把本 session revoke 称为删除 client 或撤销全部 host。
 - 本地退出不等于所有历史 token 在远端失效；卸载插件也不等于撤销。提供显式登出和孤立 record 清理说明，不能卸载时删除其他 owner 的凭据。
-- 稳定 host ID 独立保存；不能因为登出导致每次重新登录都被识别为新主机。
+- 每个 `DSH_HOME` 独立保存稳定 host ID。每个 profile 仅激活一个已验证且具备推理权限的注册。切换取消旧账号请求及缓存，其他已保存注册仍可由用户选择。
 - DSH `0.2.2-rc.1` 的 `session.commit(record)` 使用固定值写入，进入提交后取消不再撤回。再授权若覆盖已有记录，须用锁内 generation 检查处理 logout 和切换竞争。合成挂载试验只覆盖基本提交。[宿主提交语义](research/dsh-contracts.md#授权提交与账号)
 - 含 `id_token_hint` 或个人信息的授权 URL 仅由 Host 打开系统浏览器。Client 及 CLI 输出只呈现必要的安全操作和状态，异常与日志须脱敏。
 

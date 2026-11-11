@@ -38,9 +38,9 @@ P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)�
 
 | ID | 场景 | 可观察通过条件 |
 |---|---|---|
-| L5 | 隔离 profile 安装、GUI/CLI 主对话、title、compaction、resume | 模型可选可提交。记录有无 context 时的主对话和路由切换，以及各辅助入口的已配置路由和结果。支持范围须与实际通过的入口一致 |
+| L5 | 本地 Web 与官方 Desktop 各自在隔离 profile 安装并运行 | 模型可选可提交，模型切换与重启恢复可观察。记录有无 context 时的行为，以及 title 和 compaction 的停用或显式路由。报告真实安装载体、版本与限制 |
 | B1 | 与原 OpenAI/DeepSeek provider 共存、重名、禁用／卸载 | 无 registry 覆写；冲突清楚；其他 provider 前后均可用；重启生效状态准确 |
-| U1 | 官方 UX 与多个保存注册 | Continue with ChatGPT、首次 plan 确认、Using ChatGPT plan、Manage usage 和限额指引可观察；活动注册明确；同 email 不同 client 不合并；未验证登录不替换当前账号 |
+| U1 | 两个宿主的插件详情设置、官方 UX 与多个保存注册 | 插件管理页的对应详情可进入设置。Continue with ChatGPT、首次 plan 确认、Using ChatGPT plan、Manage usage 和限额指引可观察。同 email 的不同 client 保持独立。新注册通过验证且有推理权限后才能成为活动注册 |
 | B2 | 实际 packed bundle 与语言资源 | 相同包摘要贯穿 pack/install；入口/patch/locales/icon 齐全；中文／英文无模板 fallback |
 | R1 | 真实 eligible 账号、自身 app 登录与 catalog | 展示真实 app；实际 scope/resource 合格；模型目录属于当前 workspace，凭据不外泄 |
 | R2 | 真实文本→工具审批→执行→模型完成 | response.completed 与 DSH settlement 对应；至少一轮工具结果回传；真实订阅授权而非 API key 或旧 Codex 凭据 |
@@ -52,4 +52,4 @@ P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)�
 - 研究文档完成、实现完成、自动化通过、宿主加载、GUI 观察、真实推理和发布是独立状态。
 - 任何准入不明、identity/aud/nonce 未验证、刷新 race、秘密泄漏、工具越权、无 completed 被当成功、会话不可恢复，均为 release blocker。
 - 上游 preview 未支持的功能以明确 unsupported 关闭，不借用其他 app 身份或换非公开 endpoint 消除阻断。
-- 当前目录文档验收：内部相对链接有目标、manifest 为私有规划包且不伪装可安装、计划与验收编号一致、未写真实凭据、事实可追溯。该检查不替代上述运行验收。
+- 当前目录文档验收：内部相对链接有目标、manifest 与实际包内容一致、计划与验收编号一致、事实可追溯。使用合成凭据。真实宿主结果另行记录。

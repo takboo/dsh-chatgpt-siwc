@@ -30,20 +30,20 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 
 ## 2. 标准 bundle 与公开注册
 
-- 实施后补齐 ESM Host 入口、`dsh.bundle.patch`、独立插入 row、必要 Host exports、Config schema、英文／中文 meta.title/description、原创或许可清楚的 icon，以及明确 `files` 分发清单。
+- P1 的 Host ESM、Client factory、`dsh.bundle.patch`、独立 row、双语展示资源及原创 icon 由同一包提供。本地 Web 与官方 Desktop 使用相同包。插件 bundle 只插入自身 row，隔离 profile 的辅助功能配置由测试层提供。
 - provider `chatgpt-siwc`，凭据 owner 暂定 `chatgpt-siwc`；通过宿主 credentialKey helper 创建合法 key，不拼接未经验证的邮箱或 workspace 名称。
 - 使用 `llm.registerAdapter`；provider 重名时失败并保留原注册，绝不覆盖现有 openai/openai-codex 路由。
 - `authorization.registerFlow` 管理按本地注册 key 的交互。新注册验证后才落盘。再授权提交须在 `modifyRecord` 锁内核对 generation，实施前验证此写入与 authorization settlement 的一致性。Client 只接收安全状态与操作入口，含 ID token hint 的 URL 由 Host 启动系统浏览器。
 - 必须实现 `listModels` 与 `resolveModel`；目录只显示 `visibility == "list"` 项，保留服务器顺序，UI 用 display_name、请求用 slug。目录变化使用 `llm/models-updated` emit；可配置 provider 目录只有在 settings namespace 契约完成后才注册，不能返回虚假可编辑项。
 - 模型发现与 GUI 的公开读取只返回元数据／状态，不返回 OAuth token；特权请求留在 Host。
 - 若缺失 hard dependency，插件明确 inactive 或加载失败；不绕过 Service 自行寻找宿主私有文件。
-- 官方 UX 要求 Continue with ChatGPT、首次 plan 确认、Using ChatGPT plan、Manage usage 与限额操作。多个保存注册可分别再授权，同一时刻激活一个并明确显示。[接口快照](research/dsh-contracts.md#client-公开扩展)列出已核对的候选 Slot，实施前决定最小 Client 与脱敏 Host 操作面。[SIWC UX](https://developers.openai.com/siwc/ui-ux-guidelines.md)
+- 插件管理页用 `plugins.bundle.config` 按包名注册设置，放在插件详情。P1 显示本构建的登录状态。账号实现加入 Continue with ChatGPT、活动账号、切换和登出，首次启用 plan 确认一次。输入框附近用 `conversation.input.dock` 展示 Using ChatGPT plan 和 Manage usage，限额状态同样提供用量入口。[接口快照](research/dsh-contracts.md#client-公开扩展) · [SIWC UX](https://developers.openai.com/siwc/ui-ux-guidelines.md)
 
 ## 3. OAuth 与 grant 生命周期
 
 依据[官方登录](https://developers.openai.com/siwc/token-sharing-open-source/sign-in.md)。
 
-1. 首次生成稳定、不含 PII 的应用 host ID，持久化到应用安装实例状态。与 account grant、profile 选择分别管理；登出账号不重生 host ID，迁移／重装语义需明确。
+1. 每个 `DSH_HOME` 首次生成稳定、不含 PII 的应用 host ID。独立保存注册记录及每个 profile 的活动注册选择。登出保留 host ID，迁移／重装语义需明确。
 2. 首登使用跨安装一致的真实 `agent_name_hint` 和入口 `dynamic_agent_client`；再授权用 issued ID，省略 name hint，可按官方要求发送保存的 login hints。每次生成 state、nonce、PKCE S256 verifier/challenge；请求 scopes 为 `openid profile email offline_access resource.invoke chatgpt.tokens.use.direct`，resource 为 `https://api.openai.com/v1`。
 3. 限 loopback callback，验证预期路径、state、一次性使用、超时、取消；在打开浏览器前绑定监听地址。callback 的 issued client ID 按官方格式接收，与此次授权上下文绑定。
 4. 按官方协议使用 issued ID 换取 token，以可信 discovery/JWKS 校验 ID token 的签名、issuer、audience、时效、nonce；audience 必须对应 issued ID，不是 dynamic_agent_client。允许的算法和 issuer 固定，不信任回调提供任意 JWKS URL。

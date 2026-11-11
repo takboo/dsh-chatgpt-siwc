@@ -2,7 +2,7 @@
 
 为 DeepSeek Harness 规划的 Sign in with ChatGPT 模型 provider 插件。使用自身应用身份与 OpenAI 公开接口，让 DSH 继续负责上下文、Agent 循环、会话记录、工具审批及执行。
 
-> **阶段：已完成立项接入和本轮 P0 离线核对。** P0 退出条件仍有缺口，详见[实施计划](docs/implementation-plan.md)。当前尚无可安装插件。
+> **阶段：P1 离线包骨架。** 首版目标为本地 Web 和官方 Desktop。当前构建提供插件详情设置入口及独立 provider，真实登录和推理待实现。[实施计划](docs/implementation-plan.md)
 
 ## 开始阅读
 
@@ -16,5 +16,5 @@
 
 - 拟用 package：`@local/dsh-chatgpt-siwc`；provider：`chatgpt-siwc`。两者均为项目自定义名称，不表示官方认证。
 - [共享基座锁](dsh-engineering.lock.json)固定接入契约。[P0 报告](docs/evidence/p0-offline-2026-11-11.md)记录 DSH `0.2.2-rc.1`、Cordis `4.1.0` 和传输依赖的核对结果。
-- [包清单](package.json)仅标识私有规划工作区。[源码布局](src/README.md)描述未来模块，[测试入口](test/README.md)提供隔离 fixture 复跑方式。
+- 项目采用 [MIT 许可](LICENSE)，插件在用户本地运行。[包清单](package.json)定义私有候选包，[测试入口](test/README.md)提供构建、探针与包校验方式。
 - 安装、账号登录与真实推理须另行授权，并使用隔离 profile。发布须单独授权。

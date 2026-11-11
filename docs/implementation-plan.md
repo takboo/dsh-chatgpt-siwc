@@ -1,31 +1,31 @@
 # 分阶段实施计划
 
-当前已完成立项接入及 [P0 首轮离线核对](evidence/p0-offline-2026-11-11.md)。P0 尚未退出，P1–P5 待开始。阶段结果按[验收标准](acceptance.md)判定。
+已完成 [P0 首轮离线核对](evidence/p0-offline-2026-11-11.md)，已启动离线 P1。P0 的真实账号验证仍待授权。阶段结果按[验收标准](acceptance.md)判定。
 
 ## P0：可行性验证与方案锁定
 
 基线为 DSH `0.2.2-rc.1`。使用[基座锁](../dsh-engineering.lock.json)及[离线复跑入口](../test/README.md)。
 
-- [ ] 确认实际运行、收费和分发形态。由项目所有者确定 OSS 许可，或核实实际形态所需的商业／托管准入。
+- [x] 确定 MIT 许可、插件免费、本地运行、用户自管账号和凭据，按 OSS／本地 SIWC 路径实施。实际账号与工作区的推理资格待实测。[许可证](../LICENSE)
 - [x] 在隔离 Cordis composition 编译、挂载及释放公开 adapter 和授权 flow。用合成 grant 和 `models[]` 核对目录、通知及省略 context 的行为。
 - [x] 用已发布的 DSH pi-ai adapter 与 pi-ai `1.3.0` 捕获请求和流。独立路由的请求、目录和用量有明确缺口，选择专用 adapter。
 - [x] 用 `openai@7.55.0` 核对请求类型、namespace、replay 请求字段、取消、单次发送及原始 SSE 终态。选为候选 transport，协议校验与结算由插件负责。
-- [ ] 决定首个受支持的请求入口及辅助路由策略。在公开配置下验证 title／compaction、切换和 resume。缺 context 或辅助请求强制输出上限时，按[接口快照](research/dsh-contracts.md)解决后再声明支持。
-- [ ] 确定最小 Client／Host 交互及账户 lifecycle。选定公开 Slot，确认安全的浏览器启动与账户切换路径，验证共享记录的世代保护和合成 refresh/logout 竞争。
+- [x] 首版同时以本地 Web 和官方 Desktop 为目标。隔离试验 profile 停用 LLM 自动标题、自动压缩及手动 `/compact`，验证主对话、模型切换与重启恢复。需要辅助模型时由用户显式配置路由。真实宿主结果按 L5 分别记录。
+- [x] 设置使用插件详情页的 `plugins.bundle.config`。Host 打开系统浏览器并处理回调。每个 `DSH_HOME` 固定 Host ID，注册各自存储，每个 profile 只激活一个。使用锁内 `generation` 校验，先做合成竞争验证。
 - [ ] 经另行授权，做自身 app 身份的首次登录＋目录＋最小推理；失败区分准入与实现错误。
 
-进入 P1 前，确定分发形态与准入、首个支持的宿主入口及辅助路由、凭据世代提交策略和最小 UX 路径。P0 退出另需经授权的最小账号验证。若账号验证尚未授权，计划只记录实际通过的离线范围。
+离线 P1 依上述已确定的范围推进。P0 退出另需经授权的最小账号验证。
 
 ## P1：标准包与离线基础
 
 依赖：P0 的离线架构选择及上述 P1 进入条件。
 
-- [ ] TypeScript ESM 构建，标准 manifest／Host export／bundle patch。按 DSH 精确版本声明 engine 和宿主 peer。
-- [ ] 独立 row／provider、英文与中文展示资源、原创 icon、分发文件清单。展示元信息可参考[基座 PR #8 的合并版本](https://github.com/takboo/dsh-plugin-engineering/blob/1393e85ca4c59afcb9cd0fa23caa8a19640d0f27/docs/distribution.md#已安装插件的展示元信息)。
-- [ ] 建立 lint/typecheck/build/test/pack 检查，选择一个包管理器并提交对应 lockfile；无必要安装脚本。
-- [ ] 注入时钟、HTTP 与 store 的测试 seam；记录输入冻结与 effect 释放测试。
+- [x] TypeScript Host ESM 和 DSH Client factory，标准 manifest、Host export 与独立 bundle patch。engine 固定 `0.2.2-rc.1`，使用宿主 peer。
+- [x] 独立 row／provider、双语展示资源、原创 icon 和分发文件清单。设置入口通过公开 bundle 插槽显示当前构建状态。[基座 PR #8](https://github.com/takboo/dsh-plugin-engineering/blob/1393e85ca4c59afcb9cd0fa23caa8a19640d0f27/docs/distribution.md#已安装插件的展示元信息)
+- [x] 使用 npm 锁文件和 lint、typecheck、build、test、pack 检查。Host 入口验证冻结输入与 effect 释放。
+- [ ] 随 P2／P3 引入时钟、HTTP 和 store 调用时接入可替换测试输入。当前竞争用例使用官方本地 backing 和合成凭据。
 
-退出：隔离 composition 加载和卸载、路由冲突测试通过；文档与实际命令一致。不在当前日用 profile 试装。
+离线包骨架的通过条件为隔离 composition 加载、卸载、路由冲突和打包检查均通过。真实安装使用另行授权的隔离 profile。
 
 ## P2：OAuth、凭据和模型目录
 
@@ -51,7 +51,7 @@
 
 依赖：P3，另行授权安装和账号使用。
 
-- [ ] 按 L5 与 B1 完成 GUI、CLI 可用面和主对话／title／compaction／resume；实际不支持的入口收窄并公开说明。
+- [ ] 按 L5 与 B1 分别完成本地 Web、官方 Desktop 的主对话、模型切换、重启恢复、辅助路由限制、插件设置入口与共存验收。按实际测试的 Desktop 操作系统和版本声明支持。
 - [ ] 真实会话的文本、工具、停止、重启续接；记录 request ID 与用量可见性，尽量低消耗。
 - [ ] 与原 provider 共存；disable/unload/重启不破坏其他插件；恢复测试前状态。
 
