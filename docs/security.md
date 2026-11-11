@@ -1,6 +1,6 @@
 # 安全与账号生命周期
 
-状态：P2 用合成授权和实际本地 backing 验证了部分防护。范围见 [P2 证据](evidence/p2-offline-2026-11-11.md)。官方依据见[官方研究](research/openai-siwc.md)，宿主限制见[接口快照](research/dsh-contracts.md)。
+P2 用合成授权和实际本地 backing 验证了竞态与隔离。P4 在本机双宿主验证了真实注册复用、自然刷新和远端撤销。[P2 证据](evidence/p2-offline-2026-11-11.md) · [P4 证据](evidence/p4-local-native-2026-11-11.md#实机结果) · [官方依据](research/openai-siwc.md) · [宿主限制](research/dsh-contracts.md)
 
 ## 信任假设
 

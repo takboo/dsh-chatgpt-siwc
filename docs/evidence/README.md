@@ -2,13 +2,13 @@
 
 各报告的结论适用于其中标识的版本、候选包和测试范围。当前阶段见[实施计划](../implementation-plan.md)，复跑步骤见[测试入口](../../test/README.md)。
 
-| 阶段 | 历史记录 |
+| 阶段 | 验收与历史记录 |
 |---|---|
 | P0 | [立项与离线核对](p0-offline-2026-11-11.md) |
 | P1 | [插件骨架与打包](p1-offline-2026-11-11.md) |
 | P2 | [合成授权和目录](p2-offline-2026-11-11.md) · [Web 与 macOS Desktop 安装](p2-host-2026-11-11.md) |
 | P3 | [Responses 协议](p3-offline-2026-11-11.md) · [原生工具和会话](p3-native-2026-11-11.md) · [离线验收矩阵](p3-acceptance-2026-11-11.md) |
-| P4 | [交互环境](p4-interactive-2026-11-11.md) · [联机候选与出网](p4-candidate-2026-11-11.md) · [真实账号与最小推理](p4-real-account-2026-11-11.md) |
+| P4 | [本机双宿主验收与问题处置](p4-local-native-2026-11-11.md) · [早期真实账号与最小推理](p4-real-account-2026-11-11.md) · [联机候选与出网](p4-candidate-2026-11-11.md) · [Tart 交互环境](p4-interactive-2026-11-11.md) |
 
 ## 记录模板
 

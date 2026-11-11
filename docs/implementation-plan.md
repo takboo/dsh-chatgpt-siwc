@@ -1,6 +1,6 @@
 # 分阶段实施计划
 
-已通过 [P3 离线验收](evidence/p3-acceptance-2026-11-11.md)。仓库已包含联机授权与 Responses 流兼容修复，继续推进 [P4 实机验收](#p4隔离-profile-与真实账号验收)。历史实测结果以报告中的候选包摘要为准。通过条件见[验收标准](acceptance.md)，各阶段原始记录见[证据索引](evidence/README.md)。
+[P3 离线验收](evidence/p3-acceptance-2026-11-11.md)和 [P4 本机双宿主验收](evidence/p4-local-native-2026-11-11.md)已通过，下一阶段是 [P5 发布准备](#p5发布准备是否发布另行决定)。历史实测范围以报告中的宿主版本、配置和候选包摘要为准。[验收标准](acceptance.md) · [证据索引](evidence/README.md)
 
 ## P0：可行性验证与方案锁定
 
@@ -55,16 +55,17 @@
 - [x] 同一离线包通过 Web 和 Tart Desktop 的隔离安装与交接演练。[环境证据](evidence/p4-interactive-2026-11-11.md)
 - [x] 本地联机候选通过两种宿主的 OAuth 入口开关、系统浏览器启动、取消和 Clash TUN 无凭据预检。[候选证据](evidence/p4-candidate-2026-11-11.md)
 - [x] 本机 Web 候选通过真实登录、目录、复用原注册重新授权、最小文本推理及远端撤销。[实测证据](evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
-- [ ] 完成 Desktop 真实账号授权和目录验证（R1）。Tart 的手机扫码曾因来宾蓝牙不可用而阻塞。[历史记录](evidence/p4-real-account-2026-11-11.md#tart-扫码复试和本机-web-验证)
-- [ ] 用同一候选包完成 Web、Desktop 的主对话、模型选择与切换、辅助路由限制、插件设置及 Composer plan 状态验收（L5、U1、B2）。按实际验收的操作系统和版本声明支持。
-- [ ] 完成真实工具审批、执行及工具结果回传（R2），验证停止、令牌刷新、重启续接（R3）。记录安全 request ID 和用量可见性。
-- [ ] 验证与原 provider 共存、禁用、卸载和重启（B1），恢复试验前状态。
+- [x] 本机官方 macOS ARM64 Desktop 通过真实账号授权、模型目录及主对话（R1）。[本机双宿主证据](evidence/p4-local-native-2026-11-11.md)
+- [x] 本机 Web 和 Desktop `0.2.2-rc.1` 通过同包安装、主对话、模型选择与切换、设置和 Composer 订阅徽标验收。核对多注册、双语及辅助路由限制（L5、U1、B2）。[本机双宿主证据](evidence/p4-local-native-2026-11-11.md)
+- [x] 最终候选包在 Desktop 完成真实工具审批、执行及工具结果回传（R2）。[用量与请求 ID 可见性](evidence/p4-local-native-2026-11-11.md#实机结果)
+- [x] 验证停止、令牌刷新、重启续接和登出（R3），移除两处试验安装并保留已退出的注册映射。[本机双宿主证据](evidence/p4-local-native-2026-11-11.md)
+- [x] 在隔离 Desktop 核对原 OpenAI 和 DeepSeek provider 共存、同名、禁用、卸载和重启（B1）。两条原路由用回环合成服务。[原路由证据](evidence/p4-local-native-2026-11-11.md#跨-provider-回放)
 
-退出：U1、R1–R3 及其他 mandatory 用例均 pass，无“跳过当通过”；提供同一产物的身份和脱敏证据。
+退出：U1、R1–R3 及其他 mandatory 用例均 pass，无“跳过当通过”；提供同一产物的身份和脱敏证据。2026-11-11 完成 macOS ARM64 本机 Web 与 Desktop `0.2.2-rc.1` 的隔离 profile 验收。已测配置关闭 LLM 标题和手动／自动压缩，发布与扩展支持范围由 P5 判定。
 
 ## P5：发布准备（是否发布另行决定）
 
-依赖：P4，用户批准发布，确认许可／准入未变化。
+准备工作基于 P4 结果。正式发布前复核许可与准入，并取得用户发布授权。
 
 - [ ] 许可证、第三方声明、隐私与数据流说明、依赖审计和支持矩阵。
 - [ ] 打包文件与元数据检查，token canary 扫描，隔离 profile 安装同一包验证。

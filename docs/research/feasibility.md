@@ -1,6 +1,6 @@
 # 可行性结论与复用决策
 
-2026-11-11 更新。DSH 公开 Host 接口支持独立 provider 接入。P3 已通过合成推理和隔离宿主验收。P4 本地候选在一个授权的本机 Web 账号及工作区中完成了目录读取和最小文本推理。[P3 验收](../evidence/p3-acceptance-2026-11-11.md) · [P4 实测](../evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
+2026-11-11 更新。DSH 公开 Host 接口支持独立 provider 接入。P3 已通过合成推理和隔离宿主验收。本机 Web 和官方 Desktop 已以真实订阅验证模型目录、文本和会话恢复，Desktop 已验证工具审批与回传。[P3 验收](../evidence/p3-acceptance-2026-11-11.md) · [P4 双宿主实测](../evidence/p4-local-native-2026-11-11.md)
 
 ## 分层结论
 
@@ -9,10 +9,10 @@
 | 官方公开路径 | 已有文档依据 | [OSS/local SIWC](https://developers.openai.com/siwc/token-sharing-open-source.md)提供动态注册、授权及 public Responses 推理路径 |
 | DSH 原生流程 | 隔离 composition 已核对 | 已发布的 `0.2.2-rc.1` 接口可挂载模型、授权和凭据。[宿主快照](dsh-contracts.md) |
 | 只改现有 provider 配置 | 当前独立路由不满足 | pi-ai 公开路径发送裸函数及显式 system，拒绝 `models[]`，无法按现有配置满足本项目契约。[抓包结果](../evidence/p0-offline-2026-11-11.md#pi-ai-对照) |
-| 专用 Adapter | 已选设计基线 | 自有 route，使用 DSH interface，实现 SIWC 请求转换、错误映射与终态判断 |
-| 官方 SDK | Host 固定 `openai@7.55.0` | 官方预览要求 `store:false`、`stream:true` 和 namespaced functions。合成测试核对固定端点、单次发送和终态，真实工具回传待验。[官方推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) · [预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) · [P3 证据](../evidence/p3-offline-2026-11-11.md) |
+| 专用 Adapter | 维持现有设计 | 同宿主插件通过 `onPayload` 在 pi-ai 上补齐请求转换。当前专用路由保留 DSH 的工具和重试边界。实测 SIWC `call_id` 上限为 64 字符，使用固定长度映射可从原 OpenAI 路由续接工具历史。长 SSE 保活后仍须收到真实完成终态。[Responses 对照及离线探针](responses-protocol-comparison.md) · [跨路由实测](../evidence/p4-local-native-2026-11-11.md#跨-provider-回放) |
+| 官方 SDK | Host 固定 `openai@7.55.0` | 官方预览要求 `store:false`、`stream:true`，本地函数可用 namespace 或 `additional_tools` 声明，本项目选择 namespace。合成测试核对固定端点、单次发送和终态，Desktop 实测 namespace 工具结果回传。[官方推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) · [预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) · [本机证据](../evidence/p4-local-native-2026-11-11.md#实机结果) |
 | 本项目准入 | 选定 OSS／本地路径 | 项目采用 MIT。插件免费，用户在本机 Web 或官方 Desktop 自管账号和凭据。[许可证](../../LICENSE) · [SIWC Overview](https://developers.openai.com/siwc/token-sharing-open-source) |
-| 账号／workspace／模型可用 | 已实测一个工作区 | P4 工作树候选在本机 Web 完成目录和 `gpt-6.1-sol` 的最小文本推理。其他工作区、模型、用量限制和 Desktop 真实账号按实际验收结果记录。[P4 实测](../evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过) |
+| 账号／workspace／模型可用 | 已实测一个工作区 | 同一已验证邮箱的两条注册分别可用。在本机双宿主验证 `gpt-6-sol` 和 `gpt-6.1-sol`。默认自动压缩开启时，无容量元数据的模型切换仍受 DSH `0.2.2-rc.1` 限制。[本机证据](../evidence/p4-local-native-2026-11-11.md) · [宿主快照](dsh-contracts.md#主对话与辅助请求) |
 | 发布／多版本支持 | 待验收 | 离线宿主结果限定在固定 DSH 版本。完整宿主支持范围和发布条件见[实施计划](../implementation-plan.md)。[P2 双宿主证据](../evidence/p2-host-2026-11-11.md) |
 
 ## 选择与取舍

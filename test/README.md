@@ -2,13 +2,19 @@
 
 ## P4 交互验收
 
-本地 Web 的离线回归走下方固定 Linux Chromium 入口。macOS Desktop 的人工交接使用同一候选包，从锁定基座的共享 Tart 基线创建本轮专用来宾。按[验收标准](../docs/acceptance.md)分别记录宿主观察、账号验证和真实推理。
+普通 Web 回归使用[固定 Linux Chromium](#p2-隔离宿主)。需要本机通行密钥时，按[本机真实账号验收](#本机真实账号验收)使用同一候选包在 Web 和官方 Desktop 复测。需要在来宾里复跑交接时使用 Tart。按[验收标准](../docs/acceptance.md)记录宿主观察、账号验证和真实推理。
+
+### Tart 来宾交接
 
 1. 按[隔离宿主](#p2-隔离宿主)准备输入。核对基座 checkout 的 origin、tag 和 SHA，以及共享 `TART_HOME` 的基线、空间和 `desktop-job.lock`。取得该锁后克隆本轮唯一命名的来宾，确认克隆和基线身份，结束后只清理本轮克隆和本轮持有的锁。
 2. 用 Tart 原生窗口启动来宾。演练采用 `--net-host --no-audio --no-clipboard --no-usb-accessories`，仅挂载本轮输入目录且为只读。来宾内为应用建立独立 `HOME`、`DSH_HOME` 和用户数据目录，核对 Desktop 签名、版本与候选包摘要。
 3. 用合成的页面和测试标记演练交接。双方在同一 Tart 窗口轮流操作，接回后核对对方留下的标记和窗口状态。将窗口可见、自动操作、人工操作、接回四项分别记录。按离线范围复跑插件安装、设置页和重启，使用独立的合成授权测试验证账号逻辑。
 4. 联机来宾经本机 Clash TUN 出网。先用无凭据请求核对来宾 DNS 和 TLS，并用 Clash 连接记录或 TUN 接口证据确认同一请求经过 TUN。宿主路由或来宾能访问网页只作为预检。路径未确认时暂停联网验收。
 5. 一次性来宾结束时退出应用、停止并回收来宾，复查基线和实验室锁。共享基线和来宾磁盘快照不承载真实账号。
+
+已验证的无凭据联机配置使用宿主的限源 CONNECT 代理，经 Clash TUN 解析并连接两个官方公开目标。Safari 使用来宾系统代理，Host 使用来宾回环转发。开新来宾后复核代理读回、回环绕过、TLS 和 TUN 握手，再进入真实账号步骤。[联机预检记录](../docs/evidence/p4-candidate-2026-11-11.md#预检出网)
+
+### 联机候选包
 
 从当前源码按[构建与打包步骤](#p1-包骨架)生成 P4 候选包。联机步骤使用支持 `enableLiveOAuth` 的候选包。各历史实测的包摘要与源码快照见[证据索引](../docs/evidence/README.md)。
 
@@ -22,7 +28,13 @@
 
 回归时先观察默认设置页的离线状态，再应用上述配置，核对登录按钮出现。仅宿主网络可用于验证打开浏览器、回环交接和取消。真实账号步骤使用通过无凭据联机预检的隔离 profile。
 
-已验证的无凭据联机配置使用宿主的限源 CONNECT 代理，经 Clash TUN 解析并连接两个官方公开目标。Safari 使用来宾系统代理，Host 使用来宾回环转发。开新来宾后复核代理读回、回环绕过、TLS 和 TUN 握手，再进入真实账号步骤。[联机预检记录](../docs/evidence/p4-candidate-2026-11-11.md#预检出网)
+### 本机真实账号验收
+
+需要本机浏览器的通行密钥时，可在同一台 Mac 上用官方 Desktop 和其随附的 CLI 启动本机 Web。两者使用独立的试验 `DSH_HOME` 下的 `desktop` 和 `web` profile，Desktop 另指定独立的 `--user-data-dir`。在试验目录核对签名、版本、无凭据 TLS 预检和候选包摘要。Web 仅监听 `127.0.0.1`。
+
+用官方 CLI 将同一 tarball 装到两个隔离 profile。用 `dsh --profile web --host 127.0.0.1 --port 0` 启动 Web，由 CLI 自动打开本次完整入口。若页面提示 `dsh web authentication required`，从本机 CLI 重开本次启动的完整入口。完整 URL 含本地鉴权信息，留在本机。
+
+对没有可靠 `contextWindow` 的模型，在试验配置中停用 `session-title-llm` 与各 preset 的 `command-compact`，并将 `compaction-basic.auto` 设为 `false`。用 `dsh --profile web --dump-config` 核对 Web 合成配置，Desktop 在隔离实例中复核实际行为。默认自动压缩下的切换限制及宿主版本见[本机实测](../docs/evidence/p4-local-native-2026-11-11.md)。两个 profile 共用试验 `DSH_HOME` 时，从原账号行重登可以复用注册。
 
 ### 真实账号复测
 
