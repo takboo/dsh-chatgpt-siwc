@@ -1,5 +1,21 @@
 # 测试入口
 
+## P3 离线 Responses
+
+在根目录执行 `npm test`，或构建后执行 `node --test --test-timeout=15000 test/p3/*.test.mjs`。测试通过已发布的 DSH LLM runtime 和合成 OAuth 驱动打包适配器，捕获实际 SDK HTTP 请求并用 SSE fixture 回应。覆盖文本、用量、namespace function 的两轮交换、重建 adapter 后回放、异常终态和取消。[首轮证据](../docs/evidence/p3-offline-2026-11-11.md)记录观察范围。
+
+## P3 隔离宿主验证
+
+从干净候选提交构建一次并运行 `npm run check:pack`，将产物绝对路径赋给 `artifact`。未提交的候选可先保存为独立临时 Git 快照。将已核对的基座 checkout 路径赋给 `base_checkout`。原生探针核对 checkout 的 origin、tag 与 SHA，从锁定基座读取 Node 镜像，预取锁定 npm 依赖后在断网、只读根文件系统的容器中运行。探针从 tarball 解出 Host 入口，并在容器临时目录创建合成凭据、工作区和 JSONL 会话。
+
+```sh
+bash test/p3/run-native.sh "$base_checkout" "$artifact"
+bash "$base/scripts/run-container.sh" cli test/p2/host-targets.json \
+  test/p2/host-probe.mjs "$artifact" "$(git rev-parse HEAD)" "$work/cli-report.json"
+```
+
+第二条命令的 `base` 为按下文导出的锁定基座，`work` 为现有的临时报告目录。CLI 复核候选包的实际安装、卸载和旧版拒绝。断网容器执行整套 P3 探针，使用官方 Host 的 Agent、审批、文件沙箱、压缩、重试、JSONL 和 Loader。压缩摘要走独立的合成模型路由。原生生命周期测试通过 Loader 移除并重新挂载 fixture 入口，入口调用候选包的 Host 装配函数。
+
 ## P2 离线账号和界面
 
 按下方安装锁定依赖。根目录的 `npm test` 构建包并执行 P1／P2 测试，覆盖 loopback、合成签名、真实本地 backing、DSH Typert 和目录。替身传输只接受测试中的固定端点。

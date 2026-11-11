@@ -4,6 +4,10 @@ P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)�
 
 [P2 双宿主报告](evidence/p2-host-2026-11-11.md)记录离线包的实际安装和设置页观察。L5、U1、R1 的真实账号部分仍待验。
 
+[P3 首轮证据](evidence/p3-offline-2026-11-11.md)记录 Responses 适配器在发布版 DSH LLM route 上的合成观察。[P3 隔离宿主证据](evidence/p3-native-2026-11-11.md)补充原生审批、文件沙箱、宿主重试及 JSONL 会话恢复，覆盖 T4、L3 和 L4 的本轮场景。
+
+[P3 离线验收矩阵](evidence/p3-acceptance-2026-11-11.md)记录 W1–W6、T1–T4、L1–L4 的同包复跑结果，以及 Web、Desktop 与真实账号的后续验收边界。
+
 ## 自动化与协议（mandatory）
 
 | ID | 场景／操作 | 可观察通过条件 |

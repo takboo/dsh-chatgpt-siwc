@@ -1,6 +1,6 @@
 # 可行性结论与复用决策
 
-2026-11-11 更新。**DSH 公开 Host 接口支持独立 provider 的基本接入。项目已确定离线 P1 范围，真实账号和宿主行为仍待实测。** 历史结果见 [P0 证据](../evidence/p0-offline-2026-11-11.md)。
+2026-11-11 更新。**DSH 公开 Host 接口支持独立 provider 接入。P2 离线包已验证实际 Web 与签名 macOS Desktop，P3 合成推理已通过隔离验收。真实账号推理仍待实测。** [P0 证据](../evidence/p0-offline-2026-11-11.md) · [P3 验收](../evidence/p3-acceptance-2026-11-11.md)
 
 ## 分层结论
 
@@ -10,10 +10,10 @@
 | DSH 原生流程 | 隔离 composition 已核对 | 已发布的 `0.2.2-rc.1` 接口可挂载模型、授权和凭据。[宿主快照](dsh-contracts.md) |
 | 只改现有 provider 配置 | 当前独立路由不满足 | pi-ai 公开路径发送裸函数及显式 system，拒绝 `models[]`，无法按现有配置满足本项目契约。[抓包结果](../evidence/p0-offline-2026-11-11.md#pi-ai-对照) |
 | 专用 Adapter | 已选设计基线 | 自有 route，使用 DSH interface，实现 SIWC 请求转换、错误映射与终态判断 |
-| 官方 SDK | `openai@7.55.0` 为候选 transport | 严格类型和合成请求通过。需要独立的协议与终态检查。 [官方 inference 文档](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference.md) |
+| 官方 SDK | P3 Host 固定 `openai@7.55.0` | 官方预览要求 `store:false`、`stream:true` 和 namespaced functions。合成测试捕获实际 SDK 请求，确认固定端点、单次发送、关闭重试及终态处理。真实工作区的模型与字段支持待验。 [官方推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) · [预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) · [P3 证据](../evidence/p3-offline-2026-11-11.md) |
 | 本项目准入 | 选定 OSS／本地路径 | 项目采用 MIT。插件免费，用户在本机 Web 或官方 Desktop 自管账号和凭据。真实注册、工作区推理权限和配额待实测。[许可证](../../LICENSE) · [SIWC Overview](https://developers.openai.com/siwc/token-sharing-open-source) |
 | 账号／workspace／模型可用 | 待实测 | 登录成功不代表授予直接推理；scope、目录、completed inference 分别验证 |
-| 发布／多版本支持 | 未验证 | RC 接口可能变化；当前没有安装、构建或运行证据 |
+| 发布／多版本支持 | 未验证 | 已有 P2 单个目标版本的离线宿主证据。发布和 P3 实际宿主行为仍待验证。 [P2 双宿主证据](../evidence/p2-host-2026-11-11.md) |
 
 ## 选择与取舍
 

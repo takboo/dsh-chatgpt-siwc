@@ -24,6 +24,13 @@ const hostSchema = z.object({ id: z.string().regex(/^urn:uuid:[0-9a-f-]{36}$/) }
 const accountPrefix = 'account-'
 const catalogTtl = 60_000
 
+export interface InferenceGrant {
+  registration: string
+  signal: AbortSignal
+  access(signal: AbortSignal): Promise<string>
+  assertCurrent(): Promise<void>
+}
+
 type Account = z.infer<typeof accountSchema>
 type Selection = z.infer<typeof selectionSchema>
 const accountKey = (id: string) => credentialKey(providerId, accountPrefix + id)
@@ -54,7 +61,7 @@ export class Accounts {
   readonly selectionKey: CredentialKey
   private readonly lifetime = new AbortController()
   private pending?: { controller: AbortController; id: string; committing: boolean; done: Promise<void> }
-  private catalogSignal = new AbortController()
+  private selectionSignal = new AbortController()
   private cached?: { id: string; generation: string; until: number; models: ModelView[] }
   private readonly uncertainRefreshes = new Map<string, string>()
   private retryClient?: string
@@ -71,12 +78,12 @@ export class Accounts {
 
   dispose() {
     this.lifetime.abort()
-    this.catalogSignal.abort()
+    this.selectionSignal.abort()
   }
 
   invalidate() {
-    this.catalogSignal.abort()
-    this.catalogSignal = new AbortController()
+    this.selectionSignal.abort()
+    this.selectionSignal = new AbortController()
     this.cached = undefined
     this.changed()
   }
@@ -206,7 +213,7 @@ export class Accounts {
     if (!usable(account)) throw new SiwcFault('permission')
     if (this.uncertainRefreshes.get(id) === account.generation) throw new SiwcFault('reauthorize')
     this.retryClient = undefined
-    this.catalogSignal.abort()
+    this.selectionSignal.abort()
     await this.select(id, () => !this.lifetime.signal.aborted)
   }
 
@@ -281,11 +288,44 @@ export class Accounts {
     return result.tokens.access
   }
 
+  async prepareInference(caller?: AbortSignal): Promise<InferenceGrant | undefined> {
+    const api = this.api
+    if (!api) return undefined
+    const signal = AbortSignal.any([this.lifetime.signal, this.selectionSignal.signal, ...(caller ? [caller] : [])])
+    const selection = await this.selection(true)
+    const id = selection?.active
+    if (!id) return undefined
+    const account = await this.account(id)
+    if (!usable(account)) return undefined
+    const assertCurrent = async () => {
+      signal.throwIfAborted()
+      const current = await this.selection(true)
+      const latest = await this.account(id)
+      signal.throwIfAborted()
+      if (current?.revision !== selection.revision || !usable(latest) || latest.generation !== account.generation) {
+        throw new SiwcFault('stale')
+      }
+      if (this.uncertainRefreshes.get(id) === latest.generation) throw new SiwcFault('reauthorize')
+    }
+    return {
+      registration: createHash('sha256').update(id).digest('hex'),
+      signal,
+      assertCurrent,
+      access: async operation => {
+        await assertCurrent()
+        const token = await this.currentToken(id, account, api, operation)
+        await assertCurrent()
+        operation.throwIfAborted()
+        return token
+      },
+    }
+  }
+
   async models(force = false, caller?: AbortSignal): Promise<ModelView[]> {
     const api = this.api
     if (!api) return []
     const signal = AbortSignal.any([
-      this.lifetime.signal, this.catalogSignal.signal, ...(caller ? [caller] : []),
+      this.lifetime.signal, this.selectionSignal.signal, ...(caller ? [caller] : []),
     ])
     const selection = await this.selection(true)
     const id = selection?.active

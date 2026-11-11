@@ -1,6 +1,6 @@
 # 分阶段实施计划
 
-已完成 [P0 首轮离线核对](evidence/p0-offline-2026-11-11.md)和 [P1 包骨架](evidence/p1-offline-2026-11-11.md)，已进入离线 P2。P0 的真实账号验证仍待授权。阶段结果按[验收标准](acceptance.md)判定。
+已完成 [P0 首轮离线核对](evidence/p0-offline-2026-11-11.md)、[P1 包骨架](evidence/p1-offline-2026-11-11.md)、[P2 离线双宿主验证](evidence/p2-host-2026-11-11.md)和 [P3 离线验收](evidence/p3-acceptance-2026-11-11.md)。P0 的真实账号验证仍待授权。阶段结果按[验收标准](acceptance.md)判定。
 
 ## P0：可行性验证与方案锁定
 
@@ -41,11 +41,13 @@
 
 ## P3：Responses 与 DSH 工具闭环
 
-依赖：P2。
+离线工作基于 P2 已验证的授权与目录，真实账号分支仍依赖 P0 账号验证。
 
-- [ ] 完整 history／system-developer／字段白名单／namespace 转换和逆映射。
-- [ ] 流 block／terminal／usage／reasoning replay／取消／timeout，SDK 不隐藏重试。
-- [ ] DSH 工具审批拒绝、允许、结果回传、下一轮完成与恢复。
+- [x] 通过 DSH LLM route 和合成授权接通单次 Responses 请求、文本流、受限的 namespace function、用量及终态。在重建的 adapter 中回传工具结果和加密推理状态。[首轮离线证据](evidence/p3-offline-2026-11-11.md)
+- [x] 验证完整历史、原生压缩检查点、system 到 developer、字段白名单、namespace 逆映射和动态工具投影。
+- [x] 验证交错流、终态、用量、版本化 reasoning 回放、并发模型、停止、超时和热卸载取消。SDK 每个 attempt 单次发送。
+- [x] 原生工具审批允许一次写入、用户拒绝与只读文件沙箱拒绝。失败流中的候选工具不进入执行队列。[隔离宿主证据](evidence/p3-native-2026-11-11.md)
+- [x] DSH 在提交工具结果后重试失败请求。验证单次发送、无重复写入、额度失败不重试，以及跨进程从 JSONL 恢复和派生会话。
 
 退出：W1–W6、T1–T4、L1–L4 全通过；失败 stream 不触发工具执行。
 

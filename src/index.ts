@@ -1,28 +1,25 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-authorization'
 import { credentialKeyScope } from '@deepseek-ai/dsh-credentials'
-import { LlmAdapter, LlmError, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { providerId } from './identity.js'
 import { Accounts } from './host/accounts.js'
 import { OAuth } from './host/oauth.js'
 import type { OAuthDependencies } from './host/oauth.js'
+import { responses } from './host/responses.js'
 import { Settings } from './host/settings.js'
 
 export const name = providerId
 export const inject = ['llm', 'authorization', 'credentials']
 
 class ChatGptAdapter extends LlmAdapter {
-  constructor(private readonly accounts: Accounts) {
+  constructor(private readonly accounts: Accounts, private readonly fetch?: typeof globalThis.fetch) {
     super()
   }
 
   override providerInfo(provider: string) {
     return { id: provider, name: 'ChatGPT' }
-  }
-
-  override providerRetryPolicy() {
-    return resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, providerId)
   }
 
   override async listModels(): Promise<LlmModelInfo[]> {
@@ -39,23 +36,24 @@ class ChatGptAdapter extends LlmAdapter {
   override async resolveModel(provider: string, model: string, signal?: AbortSignal) {
     const models = await this.accounts.models(false, signal).catch(() => [])
     const match = models.find(item => item.id === model)
-    return match
-      ? { ...match, provider, inputModalities: ['text'] as const }
-      : super.resolveModel(provider, model, signal)
+    return { ...this.modelInfo(provider, model), name: match?.name ?? model }
+  }
+
+  private modelInfo(provider: string, model: string) {
+    return { provider, id: model, name: model, inputModalities: ['text'] as const, systemPromptUpdate: 'in-history' as const }
+  }
+
+  override async prepareCall(provider: string, model: string, signal?: AbortSignal) {
+    const grant = await this.accounts.prepareInference(signal)
+    return {
+      model: this.modelInfo(provider, model),
+      stream: (options: GenerateOptions) => responses(options, grant, this.fetch),
+    }
   }
 
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    if (
-      options.purpose === 'session-title' ||
-      options.purpose === 'compaction' ||
-      options.maxTokens !== undefined ||
-      options.temperature !== undefined ||
-      options.stop !== undefined
-    ) {
-      throw new LlmError('This request option or purpose is unsupported by ChatGPT plan usage.', 'UNSUPPORTED_OPTION')
-    }
-
-    throw new LlmError('ChatGPT inference is unavailable in this build.', 'SIWC_UNAVAILABLE')
+    const grant = await this.accounts.prepareInference(options.signal)
+    yield* responses(options, grant, this.fetch)
   }
 }
 
@@ -68,7 +66,7 @@ export function attachAccounts(ctx: Context, dependencies?: OAuthDependencies): 
   const notify = () => ctx.emit('llm/models-updated', providerId)
   const accounts = new Accounts(ctx.credentials, ctx.authorization, profile, notify,
     dependencies && new OAuth(dependencies))
-  ctx.llm.registerAdapter([providerId], new ChatGptAdapter(accounts))
+  ctx.llm.registerAdapter([providerId], new ChatGptAdapter(accounts, dependencies?.fetch))
   ctx.effect(() => () => accounts.dispose())
   ctx.on('credentials/record-updated', key => {
     if (key === accounts.selectionKey) accounts.invalidate()

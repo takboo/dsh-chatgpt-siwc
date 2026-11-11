@@ -78,7 +78,7 @@ export function fixture() {
       if (url.href === endpoint) {
         const refresh = form.get('grant_type') === 'refresh_token'
         const issued = form.get('client_id')
-        if (refresh && state.refreshDelay) await state.refreshDelay()
+        if (refresh && state.refreshDelay) await state.refreshDelay(init.signal)
         if (refresh && state.refreshError) return Response.json({ error: state.refreshError }, { status: 400 })
         if (!refresh && state.exchangeError) return Response.json({ error: state.exchangeError }, { status: 400 })
         return Response.json({

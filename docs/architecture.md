@@ -1,6 +1,6 @@
 # 实施方案
 
-状态：P2 账号、凭据与模型目录已离线实现。默认 Host 构建停用真实账号连接，推理与工具闭环仍在 P3。决策门见[实施计划](implementation-plan.md)，外部事实见[可行性](research/feasibility.md)。
+状态：P2 账号、凭据与模型目录已离线实现。P3 已通过合成授权下的 Responses 与 DSH Host 离线验收，默认 Host 构建停用真实账号连接。范围见 [P3 验收矩阵](evidence/p3-acceptance-2026-11-11.md)，决策门见[实施计划](implementation-plan.md)。
 
 ## 1. Seam 与模块职责
 
@@ -9,7 +9,7 @@ DSH agent / title / compaction
   → llm.prepareCall → chatgpt-siwc Adapter（单次 attempt）
       → Grant manager：按账号绑定、串行刷新
       → Request codec：DSH history/tools → SIWC Responses
-      → Transport：P0 候选为 openai@7.55.0
+      → Transport：openai@7.55.0，单次发送
       → Stream codec：OpenAI events → DSH StreamChunk
   ← DSH 会话记录、工具审批/执行、下一步与重试
 
@@ -60,6 +60,8 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - 采用字段白名单。明确请求 `temperature`、`maxTokens`、`stop` 等不支持控制时返回稳定 unsupported 错误；不静默忽略。避免自己注入不支持的默认值，主对话与辅助请求兼容是 P0 门槛。
 - DSH system 语义转换为受支持的 developer/instructions 表达，保持顺序、作用与更新语义；中途 system/developer 更新不能被随意移到开头或降级成 user 文本。
 - 根据已核对宿主的 tool update/history 模式投影当前可见工具；历史移除工具仍需保留历史关联。DSH 本地工具全部装入受支持的 namespace 分组，避免 top-level function/custom 定义；不启用 OpenAI hosted tools。
+- 首轮使用稳定的 `dsh` namespace 和 DSH 投影出的当前工具集。历史调用按确定性的名称映射及原始 call ID 回传，旧声明不会随历史调用重新开放。DSH 默认工具投影会移除 developer 工具变更消息，系统提示变更沿 `systemPromptUpdate: 'in-history'` 保留并投影为 developer。
+- 离线验收使用 DSH 原生压缩引擎和独立的合成摘要路由。SIWC 主请求接收宿主投影后的检查点和保留历史。DSH 把当前可用的 deferred 工具转为即时声明，已移除的工具只保留历史调用及结果。
 - 维护 namespace＋wire name ↔ DSH 工具名的一一映射、call ID 和参数原文。合法编码、长名称、同名、重复 ID、未知 namespace、参数 JSON 错误均有 fixture；未知／越权工具不交给执行层。
 - 工具结果映射回对应 call ID。工具调用只有在响应成功结算、参数完整并通过校验后才视作可执行；部分流和失败 attempt 不产生可执行的已完成工具调用。
 - MVP 仅 text＋本地函数工具；向宿主声明准确的 text-only 能力，遵守宿主已有图片 placeholder／文件 handle 投影，不承诺图像理解，也不在 codec 再隐藏丢弃内容。若收到超出声明的原始内容则发送前拒绝。后续按 DSH attachment interface 接入，不能直读任意本机路径替代。
@@ -71,6 +73,7 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - delta 用于展示；`response.completed` 后才发成功 finish。`response.failed`、incomplete、EOF 缺 terminal、malformed JSON、取消和超时分别有终态，不把 HTTP 200 或 output_text.done 当作完成。
 - TokenUsage 映射 input/output/cache/reasoning，避免重复加总；缺失用量不伪装为已知零消耗。失败可能已计费；若宿主无法表示未知，则省略 usage 并记录非敏感诊断，不制造虚假精确值。订阅消耗不冒充已知美元价格。
 - 需要的 reasoning item／encrypted_content 与 call replay 以有界、版本化 ReplayEnvelope 保存；不存 token、ID token 或 OAuth 响应。恢复时只接受本 adapter 可验证的版本与身份绑定语义；不支持的 replay 明确降级／失败，不悄悄破坏工具关联。
+- 首轮回放在同一注册中读取已结算的加密 reasoning、assistant phase 与输出顺序。带加密推理的历史换注册时明确失败，纯文本历史可以继续投影。
 - `AbortSignal` 贯穿刷新、目录、推理、迭代和关闭；消费者提前停止也关闭上游。HMR／账号切换不得混入旧 token 或模型快照，卸载不影响其他 provider。
-- SDK 使用 `maxRetries:0` 与低层 `responses.create`。Adapter 自己检查 SSE 终态。LLM attempt 的退避和重新执行归 DSH `dsh-llm-retry`。插件只在发送前完成有界的凭据有效化。
+- SDK 使用 `maxRetries:0` 与低层 `responses.create`。Adapter 自己检查 SSE 终态。Agent loop 使用 DSH 默认有限重试策略，退避、会话日志及下一次 attempt 由 `dsh-llm-retry` 负责。直接 LLM 流保持单次发送。插件只在发送前完成有界的凭据有效化。
 - 错误沿 DSH failure interface 返回稳定 code/status/requestId/安全 Retry-After；区分 auth、准入、quota 与短暂 rate limit。代码字面值在 P0 依宿主常量核对，勿自行发明与现有 retry policy 不匹配的分类。
