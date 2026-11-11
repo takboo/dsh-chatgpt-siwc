@@ -1,6 +1,6 @@
 # 分阶段实施计划
 
-已提交的实现基线通过 [P3 离线验收](evidence/p3-acceptance-2026-11-11.md)。当前推进 [P4 实机验收](#p4隔离-profile-与真实账号验收)，实测结论对应报告中标识的本地工作树候选。通过条件见[验收标准](acceptance.md)，各阶段原始记录见[证据索引](evidence/README.md)。
+已通过 [P3 离线验收](evidence/p3-acceptance-2026-11-11.md)。仓库已包含联机授权与 Responses 流兼容修复，继续推进 [P4 实机验收](#p4隔离-profile-与真实账号验收)。历史实测结果以报告中的候选包摘要为准。通过条件见[验收标准](acceptance.md)，各阶段原始记录见[证据索引](evidence/README.md)。
 
 ## P0：可行性验证与方案锁定
 

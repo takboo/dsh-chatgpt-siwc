@@ -72,10 +72,10 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 
 - 每个 OpenAI output item/content index 映射到稳定 DSH block index；支持交错文本与多个 tool calls，不依赖增量恰好按单块到达。
 - delta 用于展示，`response.completed` 校验通过后才发成功 finish。`response.failed`、`response.incomplete`、EOF 缺终态、畸形 JSON、取消和超时分别处理。[OpenAI 流事件定义](https://developers.openai.com/api/reference/resources/responses/streaming-events#response.completed)
-- P4 工作树候选处理实测中的缺失 `Content-Type` 和 `response.metadata`。缺失媒体类型时按 SSE 解码并继续验证事件及终态，显式声明其他媒体类型时拒绝响应。适配器跳过元数据事件的内容。`response.completed` 的 `response.status` 可省略，若提供则必须为 `completed`。[实测记录](evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
+- 缺失 `Content-Type` 时按 SSE 解码并继续验证事件及终态，显式声明其他媒体类型时拒绝响应。适配器跳过 `response.metadata` 的内容。`response.completed` 的 `response.status` 可省略，若提供则必须为 `completed`。[实测记录](evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
 - TokenUsage 映射 input/output/cache/reasoning，避免重复加总；缺失用量不伪装为已知零消耗。失败可能已计费；若宿主无法表示未知，则省略 usage 并记录非敏感诊断，不制造虚假精确值。订阅消耗不冒充已知美元价格。
 - 需要的 reasoning item／encrypted_content 与 call replay 以有界、版本化 ReplayEnvelope 保存；不存 token、ID token 或 OAuth 响应。恢复时只接受本 adapter 可验证的版本与身份绑定语义；不支持的 replay 明确降级／失败，不悄悄破坏工具关联。
 - 首轮回放在同一注册中读取已结算的加密 reasoning、assistant phase 与输出顺序。带加密推理的历史换注册时明确失败，纯文本历史可以继续投影。
 - `AbortSignal` 贯穿刷新、目录、推理、迭代和关闭；消费者提前停止也关闭上游。HMR／账号切换不得混入旧 token 或模型快照，卸载不影响其他 provider。
 - SDK 使用 `maxRetries:0` 与低层 `responses.create`。Agent loop 使用 DSH 默认有限重试策略，退避、会话日志及下一次 attempt 由 `dsh-llm-retry` 负责。直接 LLM 流保持单次发送。插件只在发送前完成有界的凭据有效化。
-- 错误沿 DSH failure 接口返回稳定分类、HTTP 状态、符合格式的 request ID 和安全的 Retry-After。P4 工作树候选为流校验失败保留可用的 HTTP 状态与请求 ID，错误消息使用固定文本或限定的协议字段名。
+- 错误沿 DSH failure 接口返回稳定分类、HTTP 状态、符合格式的 request ID 和安全的 Retry-After。流校验失败保留可用的 HTTP 状态与请求 ID，错误消息使用固定文本或限定的协议字段名。

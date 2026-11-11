@@ -37,13 +37,15 @@ const reasoningOutput = reasoningReplay.extend({
   status: z.literal('completed').optional(),
 })
 const completed = z.object({
-  status: z.literal('completed'),
+  status: z.literal('completed').optional(),
   output: z.array(z.discriminatedUnion('type', [message, tool, reasoningOutput])).max(4096),
   usage: z.unknown().optional(),
 })
 const textDelta = z.object({ output_index: count, content_index: count, delta: z.string() })
 const progress = new Set([
   'response.created', 'response.queued', 'response.in_progress',
+  // SIWC may send metadata between text deltas and the completed event.
+  'response.metadata',
   'response.output_item.added',
   'response.content_part.added', 'response.content_part.done',
   'response.output_text.done', 'response.output_text.annotation.added',
@@ -61,8 +63,23 @@ interface OutputBlock {
   phase?: z.infer<typeof assistantPhase>
 }
 
-function invalidStream(): never {
-  throw new LlmError('ChatGPT returned an invalid or unsupported stream event.', 'INVALID_RESPONSE')
+function invalidStream(detail = 'returned an invalid or unsupported stream event'): never {
+  throw new LlmError(`ChatGPT ${detail}.`, 'INVALID_RESPONSE')
+}
+
+const completedFields = new Set([
+  'status', 'output', 'type', 'role', 'phase', 'content', 'text', 'refusal',
+  'namespace', 'call_id', 'name', 'arguments', 'async', 'caller', 'id', 'summary', 'encrypted_content',
+])
+
+function completedField(path: PropertyKey[] = []): string {
+  let field = 'response.completed'
+  for (const part of path) {
+    if (typeof part === 'number') field += '[]'
+    else if (typeof part === 'string' && completedFields.has(part)) field += `.${part}`
+    else break
+  }
+  return field
 }
 
 export function toUsage(value: unknown): TokenUsage | undefined {
@@ -99,13 +116,15 @@ function outputBlocks(
         }))
       case 'function_call': {
         const name = offered.get(item.name)
-        if (!name || ids.has(item.call_id) || !validToolArguments(item.arguments)) invalidStream()
+        if (!name || ids.has(item.call_id) || !validToolArguments(item.arguments)) {
+          invalidStream('returned an unoffered, duplicate, or malformed tool call')
+        }
         ids.add(item.call_id)
         return [{ key: String(i), block: { type: 'tool-call', id: ToolCallId(item.call_id), name, arguments: item.arguments } }]
       }
       case 'reasoning': {
         const parsed = reasoningReplay.safeParse(reasoningItems.get(i) ?? item)
-        if (!parsed.success || parsed.data.id !== item.id) invalidStream()
+        if (!parsed.success || parsed.data.id !== item.id) invalidStream('returned a reasoning item without matching replay data')
         const reasoning = parsed.data
         return [{
           key: String(i), reasoning,
@@ -124,20 +143,23 @@ export async function* settleResponses(
   signal: AbortSignal,
   assertCurrent: () => Promise<void>,
   failure: (code?: string) => LlmError,
+  contentTypeDeclared: boolean,
 ): AsyncGenerator<StreamChunk> {
   const partial = new Map<string, { text: string; index: number }>()
   const reasoningItems = new Map<number, z.infer<typeof reasoningReplay>>()
+  let receivedEvent = false
   for await (const event of events) {
     signal.throwIfAborted()
     if (!event || typeof event.type !== 'string') invalidStream()
+    receivedEvent = true
     switch (event.type) {
       case 'response.output_text.delta': {
         const result = textDelta.safeParse(event)
-        if (!result.success) invalidStream()
+        if (!result.success) invalidStream('returned an invalid response.output_text.delta event')
         const key = `${result.data.output_index}:${result.data.content_index}`
         let block = partial.get(key)
         if (!block) {
-          if (partial.size >= 4096) invalidStream()
+          if (partial.size >= 4096) invalidStream('exceeded the response block limit')
           block = { text: '', index: partial.size }
           partial.set(key, block)
           yield { type: 'block-start', index: block.index, blockType: 'text' }
@@ -150,7 +172,9 @@ export async function* settleResponses(
         if (event.item?.type !== 'reasoning') break
         const item = reasoningOutput.safeParse(event.item)
         if (!item.success || !count.safeParse(event.output_index).success ||
-          reasoningItems.size >= 4096 || reasoningItems.has(event.output_index)) invalidStream()
+          reasoningItems.size >= 4096 || reasoningItems.has(event.output_index)) {
+          invalidStream('returned an invalid or duplicate reasoning item in response.output_item.done')
+        }
         const replay = reasoningReplay.safeParse(item.data)
         if (replay.success) reasoningItems.set(event.output_index, replay.data)
         break
@@ -165,16 +189,20 @@ export async function* settleResponses(
         throw failure(event.code ?? undefined)
       case 'response.completed': {
         const result = completed.safeParse(event.response)
-        if (!result.success) invalidStream()
+        if (!result.success) invalidStream(`returned an invalid field at ${completedField(result.error.issues[0]?.path)}`)
         for (const [index, reasoning] of reasoningItems) {
           const item = result.data.output[index]
-          if (item?.type !== 'reasoning' || item.id !== reasoning.id) invalidStream()
+          if (item?.type !== 'reasoning' || item.id !== reasoning.id) {
+            invalidStream('returned reasoning output inconsistent with the completed stream item')
+          }
         }
         const blocks = outputBlocks(result.data.output, offered, historyCalls, reasoningItems)
         const byKey = new Map(blocks.map(({ key, block }) => [key, block]))
         for (const [key, prefix] of partial) {
           const block = byKey.get(key)
-          if (block?.type !== 'text' || !block.text.startsWith(prefix.text)) invalidStream()
+          if (block?.type !== 'text' || !block.text.startsWith(prefix.text)) {
+            invalidStream('returned final text inconsistent with the streamed text')
+          }
         }
         await assertCurrent()
         signal.throwIfAborted()
@@ -203,5 +231,6 @@ export async function* settleResponses(
         if (!progress.has(event.type)) invalidStream()
     }
   }
+  if (!contentTypeDeclared && !receivedEvent) invalidStream()
   throw new LlmError('The ChatGPT stream closed before completion.', 'TRANSPORT')
 }

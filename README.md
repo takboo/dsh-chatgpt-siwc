@@ -2,7 +2,7 @@
 
 DeepSeek Harness 的 Sign in with ChatGPT 模型 provider 插件。插件使用自身应用身份与 OpenAI 公开接口，DSH 负责上下文、Agent 循环、会话记录、工具审批和执行。
 
-首版目标为本地 Web 和官方 Desktop。当前提交的实现已通过 P3 离线验收。P4 本地候选已在隔离 Web profile 中通过真实最小文本推理，双宿主实机验收进行中。[实施计划](docs/implementation-plan.md#p4隔离-profile-与真实账号验收) · [实测记录](docs/evidence/p4-real-account-2026-11-11.md)
+首版目标为本地 Web 和官方 Desktop。P4 联机授权和 Responses 流兼容修复已纳入仓库，联机授权默认关闭。隔离 Web 已通过真实最小文本推理，双宿主实机验收进行中。[实施计划](docs/implementation-plan.md#p4隔离-profile-与真实账号验收) · [实测记录](docs/evidence/p4-real-account-2026-11-11.md)
 
 ## 开发与验收
 

@@ -157,6 +157,89 @@ test('malformed, interrupted and failed attempts expose no executable tool block
   }
 })
 
+test('invalid Responses preserve only safe upstream facts', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  const cases = [
+    ['non-SSE', new Response(canary), 'req_fixture', 'ChatGPT did not return a Responses event stream.'],
+    ['malformed SSE', new Response(`data: {${canary}\n\n`, {
+      headers: { 'content-type': 'text/event-stream' },
+    }), 'req_fixture', 'ChatGPT returned a malformed stream event.'],
+    ['unsupported event', sse({ type: canary }), canary, 'ChatGPT returned an invalid or unsupported stream event.'],
+  ]
+  for (const [name, response, requestId, message] of cases) {
+    await t.test(name, async () => {
+      response.headers.set('x-request-id', requestId)
+      reply(() => response)
+      const prior = captured.length
+      const chunks = await Array.fromAsync(ctx.llm.stream(options))
+      const failure = chunks.at(-1).reason.failure
+      assert.equal(failure.code, 'INVALID_RESPONSE')
+      assert.equal(failure.message, message)
+      assert.equal(failure.status, 200)
+      assert.equal(failure.requestId, requestId === canary ? undefined : requestId)
+      assert.doesNotMatch(JSON.stringify(chunks), /synthetic-p2-sensitive-canary/)
+      assert.equal(captured.length, prior + 1)
+    })
+  }
+})
+
+test('a Responses stream without Content-Type still requires valid SSE events', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  const unlabeled = response => {
+    response.headers.delete('content-type')
+    return response
+  }
+  reply(() => unlabeled(sse(delta('OK'), complete([message('OK')], usage))))
+  const chunks = await Array.fromAsync(ctx.llm.stream(options))
+  assert.deepEqual(chunks.at(-1).reason, { kind: 'stop' })
+  assert.equal(chunks.find(chunk => chunk.type === 'block-end').block.text, 'OK')
+  assert.equal(captured.length, 1)
+
+  for (const response of [new Response('<html>Invalid</html>'), Response.json({ output: 'Invalid' })]) {
+    reply(() => unlabeled(response))
+    const invalid = await Array.fromAsync(ctx.llm.stream(options))
+    assert.equal(invalid.length, 1)
+    assert.equal(invalid[0].reason.failure.code, 'INVALID_RESPONSE')
+  }
+  assert.equal(captured.length, 3)
+})
+
+test('the completed event supplies the terminal status when the response omits status', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  reply(() => sse(delta('OK'), { type: 'response.completed', response: { output: [message('OK')], usage } }))
+  const chunks = await Array.fromAsync(ctx.llm.stream(options))
+  assert.deepEqual(chunks.at(-1).reason, { kind: 'stop' })
+  assert.equal(chunks.find(chunk => chunk.type === 'block-end').block.text, 'OK')
+  assert.equal(chunks.some(chunk => chunk.type === 'usage'), true)
+
+  reply(() => sse({ type: 'response.completed', response: { status: 'incomplete', output: [message('OK')] } }))
+  const inconsistent = await Array.fromAsync(ctx.llm.stream(options))
+  assert.equal(inconsistent.length, 1)
+  assert.equal(inconsistent[0].reason.failure.code, 'INVALID_RESPONSE')
+  assert.match(inconsistent[0].reason.failure.message, /response\.completed\.status/)
+  assert.equal(captured.length, 2)
+})
+
+test('response metadata does not prevent the following completed event from settling', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  const metadata = { type: 'response.metadata', sequence_number: 5, metadata: { value: canary } }
+  reply(() => {
+    const response = sse(delta('OK'), metadata, complete([message('OK')], usage))
+    response.headers.delete('content-type')
+    return response
+  })
+  const chunks = await Array.fromAsync(ctx.llm.stream(options))
+  assert.deepEqual(chunks.at(-1).reason, { kind: 'stop' })
+  assert.equal(chunks.find(chunk => chunk.type === 'block-end').block.text, 'OK')
+  assert.equal(chunks.some(chunk => chunk.type === 'usage'), true)
+  assert.doesNotMatch(JSON.stringify(chunks), /synthetic-p2-sensitive-canary/)
+
+  reply(() => sse(delta('OK'), metadata))
+  const interrupted = await Array.fromAsync(ctx.llm.stream(options))
+  assert.equal(interrupted.at(-1).reason.failure.code, 'TRANSPORT')
+  assert.equal(captured.length, 2)
+})
+
 test('interleaved text keeps stable indices and deadline cancellation terminates the HTTP attempt', async t => {
   const { ctx, captured, reply } = await inference(t)
   reply(() => sse(delta('First '), delta('Second ', 1), delta('block.'), delta('block.', 1),

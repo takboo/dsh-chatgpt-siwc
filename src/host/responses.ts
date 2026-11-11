@@ -9,14 +9,20 @@ import { settleResponses } from './responses-stream.js'
 const endpoint = resource + '/responses'
 const timeoutMs = 120_000
 
-function providerFailure(code: string | undefined, status?: number, headers?: Headers): LlmError {
+function responseFacts(status?: number, headers?: Headers) {
   const id = headers?.get('x-request-id')
   const requestId = id && /^req_[A-Za-z0-9_-]{1,128}$/.test(id) ? ProviderRequestId(id) : undefined
+  return {
+    ...(status === undefined ? {} : { status }),
+    ...(requestId === undefined ? {} : { requestId }),
+  }
+}
+
+function providerFailure(code: string | undefined, status?: number, headers?: Headers): LlmError {
   const retry = headers?.get('retry-after')
   const retryMs = retry && /^\d{1,7}$/.test(retry) ? Number(retry) * 1000 : undefined
   const facts = {
-    ...(status === undefined ? {} : { status }),
-    ...(requestId === undefined ? {} : { requestId }),
+    ...responseFacts(status, headers),
     ...(retryMs ? { providerRetryAfterMs: retryMs } : {}),
   }
   if (code === 'subscription_sharing_usage_limit_exceeded') {
@@ -59,6 +65,7 @@ export async function* responses(
   const timer = setTimeout(() => deadline.abort(), timeoutMs)
   timer.unref()
   const signal = AbortSignal.any([operation.signal, deadline.signal, grant.signal, ...(options.signal ? [options.signal] : [])])
+  let upstream: Response | undefined
   try {
     const token = await grant.access(signal)
     const sdk = new OpenAI({
@@ -78,12 +85,14 @@ export async function* responses(
       },
     })
     const { data, response } = await sdk.responses.create(request.body, { signal }).withResponse()
-    if (!/^text\/event-stream(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
+    upstream = response
+    const contentType = response.headers.get('content-type')
+    if (contentType !== null && !/^text\/event-stream(?:\s*;|$)/i.test(contentType)) {
       await response.body?.cancel().catch(() => {})
       throw new LlmError('ChatGPT did not return a Responses event stream.', 'INVALID_RESPONSE')
     }
     yield* settleResponses(data, request.offered, request.historyCalls, grant.registration, signal, grant.assertCurrent,
-      code => providerFailure(code, undefined, response.headers))
+      code => providerFailure(code, undefined, response.headers), contentType !== null)
   } catch (error) {
     if (deadline.signal.aborted || error instanceof OpenAI.APIConnectionTimeoutError) {
       throw new LlmError('The ChatGPT request timed out.', 'TIMEOUT')
@@ -91,7 +100,12 @@ export async function* responses(
     if (signal.aborted || (error instanceof SiwcFault && (error.code === 'stale' || error.code === 'cancelled'))) {
       throw new LlmError('The ChatGPT request was cancelled.', 'ABORTED')
     }
-    if (error instanceof LlmError) throw error
+    if (error instanceof LlmError) {
+      if (error.code === 'INVALID_RESPONSE' && upstream) {
+        throw new LlmError(error.message, error.code, responseFacts(upstream.status, upstream.headers))
+      }
+      throw error
+    }
     if (error instanceof SiwcFault) {
       const code = error.code === 'reauthorize' || error.code === 'permission' ? 'AUTH' : 'TRANSPORT'
       throw new LlmError('ChatGPT authorization could not be obtained for this request.', code)
@@ -99,7 +113,10 @@ export async function* responses(
     if (error instanceof OpenAI.APIError && !(error instanceof OpenAI.APIConnectionError)) {
       throw providerFailure(error.code ?? undefined, error.status, error.headers)
     }
-    if (error instanceof SyntaxError) throw new LlmError('ChatGPT returned a malformed stream event.', 'INVALID_RESPONSE')
+    if (error instanceof SyntaxError) {
+      throw new LlmError('ChatGPT returned a malformed stream event.', 'INVALID_RESPONSE',
+        responseFacts(upstream?.status, upstream?.headers))
+    }
     throw new LlmError('The ChatGPT transport could not complete the request.', 'TRANSPORT')
   } finally {
     clearTimeout(timer)
