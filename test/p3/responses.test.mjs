@@ -220,11 +220,102 @@ test('the completed event supplies the terminal status when the response omits s
   assert.equal(captured.length, 2)
 })
 
-test('response metadata does not prevent the following completed event from settling', async t => {
+test('a DSH conversation from the Pi route keeps the foreign tool call and result paired on replay', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  const id = 'call_fixture|fc_fixture'
+  const assistant = createAssistantMessage({
+    source: { provider: 'openai', model: 'fixture-original' },
+    content: [{ type: 'tool-call', id, name: 'lookup', arguments: '{"query":"fixture"}' }],
+  })
+  const result = createToolResultMessage({ callId: id, content: [{ type: 'text', text: 'Found.' }], isError: false })
+  const history = [user, assistant, result, user]
+  reply(() => sse(complete([message('OK')])))
+  for (let repeat = 0; repeat < 2; repeat++) {
+    const chunks = await Array.fromAsync(ctx.llm.stream({ ...options, messages: history }))
+    assert.deepEqual(chunks.at(-1).reason, { kind: 'stop' })
+  }
+  assert.equal(captured.length, 2)
+  const [, call, output] = captured[0].body.input
+  assert.equal(call.type, 'function_call')
+  assert.match(call.call_id, /^[A-Za-z0-9_-]{1,64}$/)
+  assert.equal(call.arguments, '{"query":"fixture"}')
+  assert.deepEqual(output, { type: 'function_call_output', call_id: call.call_id, output: 'Found.' })
+  assert.deepEqual(captured[1].body.input, captured[0].body.input)
+  assert.equal(assistant.content[0].id, id)
+  assert.equal(result.toolCallId, id)
+
+  const wrong = createToolResultMessage({ callId: 'unrelated', content: result.content, isError: false })
+  const invalid = await Array.fromAsync(ctx.llm.stream({ ...options, messages: [user, assistant, wrong] }))
+  assert.equal(invalid.at(-1).reason.failure.code, 'INVALID_REQUEST')
+  assert.equal(captured.length, 2)
+
+  const longId = 'call_' + 'x'.repeat(60)
+  const longCall = createAssistantMessage({
+    source: assistant.source, content: [{ ...assistant.content[0], id: longId }],
+  })
+  const longResult = createToolResultMessage({ callId: longId, content: result.content, isError: false })
+  const longReplay = await Array.fromAsync(ctx.llm.stream({ ...options, messages: [user, longCall, longResult, user] }))
+  assert.deepEqual(longReplay.at(-1).reason, { kind: 'stop' })
+  const [, wireLongCall, wireLongResult] = captured[2].body.input
+  assert.match(wireLongCall.call_id, /^[A-Za-z0-9_-]{1,64}$/)
+  assert.notEqual(wireLongCall.call_id, call.call_id)
+  assert.equal(wireLongResult.call_id, wireLongCall.call_id)
+})
+
+test('empty completion retains usage and reports a retryable DSH failure', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  reply(() => sse(complete([], usage)))
+  const chunks = await Array.fromAsync(ctx.llm.stream(options))
+  assert.deepEqual(chunks.map(chunk => chunk.type), ['usage', 'finish'])
+  assert.equal(chunks[0].usage.totalTokens, usage.total_tokens)
+  assert.equal(chunks[1].reason.kind, 'error')
+  assert.equal(chunks[1].reason.failure.code, 'EMPTY_RESPONSE')
+  assert.equal(captured.length, 1)
+})
+
+test('an unfinished reasoning item leaves incomplete settlement and usage intact', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  const reasoning = { type: 'reasoning', id: 'rs_incomplete', status: 'incomplete', summary: [], encrypted_content: null }
+  reply(() => sse(
+    { type: 'response.output_item.done', output_index: 0, item: reasoning },
+    { type: 'response.incomplete', response: { status: 'incomplete', output: [reasoning], usage } },
+  ))
+  const chunks = await Array.fromAsync(ctx.llm.stream(options))
+  assert.deepEqual(chunks.map(chunk => chunk.type), ['usage', 'finish'])
+  assert.equal(chunks[0].usage.totalTokens, usage.total_tokens)
+  assert.equal(chunks[1].reason.failure.code, 'INCOMPLETE_RESPONSE')
+  assert.equal(captured.length, 1)
+})
+
+test('HTTP and SSE context overflow reach the DSH compaction error taxonomy', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  const error = { code: 'context_length_exceeded', message: canary }
+  const responses = [
+    () => Response.json({ error }, { status: 400, headers: { 'x-request-id': 'req_context' } }),
+    () => {
+      const response = sse({ type: 'response.failed', response: { status: 'failed', error, usage } })
+      response.headers.set('x-request-id', 'req_context')
+      return response
+    },
+  ]
+  for (const [index, response] of responses.entries()) {
+    reply(response)
+    const chunks = await Array.fromAsync(ctx.llm.stream(options))
+    const failure = chunks.at(-1).reason.failure
+    assert.equal(failure.code, 'CONTEXT_WINDOW_EXCEEDED')
+    assert.equal(failure.status, index === 0 ? 400 : 200)
+    assert.equal(failure.requestId, 'req_context')
+    assert.doesNotMatch(JSON.stringify(chunks), /synthetic-p2-sensitive-canary/)
+  }
+  assert.equal(captured.length, 2)
+})
+
+test('response metadata and keepalive do not replace or prevent completion', async t => {
   const { ctx, captured, reply } = await inference(t)
   const metadata = { type: 'response.metadata', sequence_number: 5, metadata: { value: canary } }
+  const keepalive = { type: 'keepalive' }
   reply(() => {
-    const response = sse(delta('OK'), metadata, complete([message('OK')], usage))
+    const response = sse(delta('O'), metadata, keepalive, delta('K'), complete([message('OK')], usage))
     response.headers.delete('content-type')
     return response
   })
@@ -234,7 +325,7 @@ test('response metadata does not prevent the following completed event from sett
   assert.equal(chunks.some(chunk => chunk.type === 'usage'), true)
   assert.doesNotMatch(JSON.stringify(chunks), /synthetic-p2-sensitive-canary/)
 
-  reply(() => sse(delta('OK'), metadata))
+  reply(() => sse(delta('OK'), metadata, keepalive))
   const interrupted = await Array.fromAsync(ctx.llm.stream(options))
   assert.equal(interrupted.at(-1).reason.failure.code, 'TRANSPORT')
   assert.equal(captured.length, 2)

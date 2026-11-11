@@ -18,10 +18,10 @@
 | W1 | 最终 HTTP 请求捕获（可用替身传输） | public origin、正确路径与 Bearer 授权，使用 DSH `attributionHeaders()`；OAuth app/host 参数另由 A1 核对；store:false、stream:true，SDK 自动 retry 关闭 |
 | W2 | 温度、maxTokens、stop 等不支持控制 | 出网前明确 unsupported；默认不注入禁用字段；不静默忽略显式配置 |
 | W3 | 多轮／压缩 history、developer 更新、工具结果 | 发送当前完整上下文且顺序语义正确；无 previous_response_id、system input、隐藏额外提示或丢历史 |
-| W4 | 缺失媒体类型、EOF、failed、incomplete、malformed、HTTP 200 后中断 | 缺失 `Content-Type` 时按 SSE 验证；仅有效 `response.completed` 认作成功；每个 attempt 一个终态；部分工具不进入执行队列 |
-| W5 | 交错 delta／多个 tools／元数据／重复终态与未知事件 | block index 稳定；JSON／ID 对应准确；忽略 `response.metadata` 的内容；无重复 usage/finish；未知影响语义事件安全失败 |
+| W4 | 缺失媒体类型、EOF、failed、incomplete、malformed、空完成、HTTP 200 后中断 | 缺失 `Content-Type` 时按 SSE 验证。有效 `response.completed` 必须有内容块。空完成报告 `EMPTY_RESPONSE`，未完成 reasoning 保留失败终态和用量。每个 attempt 一个终态，部分工具不进入执行队列 |
+| W5 | 交错 delta／多个 tools／元数据／保活／重复终态与未知事件 | block index 稳定；JSON／ID 对应准确；跳过 `response.metadata` 和 `keepalive` 并等待实际终态；无重复 usage/finish；未知影响语义事件安全失败 |
 | W6 | usage 有／缺／含 cache/reasoning／失败已消耗 | 宿主字段准确且不重复计数；未知不伪装精确零或美元费用 |
-| T1 | 多个 namespace function tools 与工具结果 | wire 分组合法；返回逆映射为原 DSH 名称／call ID；结果正确进入下一次请求 |
+| T1 | 多个 namespace function tools、工具结果和切换前的工具历史 | wire 分组合法。返回逆映射为原 DSH 名称和 call ID。来自 Pi 等路由的复合或超长 ID 稳定映射为至多 64 字符的出站 ID，调用和结果配对，DSH 已保存的 ID 保留 |
 | T2 | 长名、碰撞、未知 namespace、重复 call ID、畸形参数 | 可逆映射无碰撞；越权／畸形请求在执行前失败，不被任意路由 |
 | T3 | 动态增删与 deferred 工具 history | 当前可见工具与历史关联分别正确；已移除工具不重新获得可执行权限 |
 | T4 | 工具审批拒绝／允许、sandbox 拒绝 | 拒绝时零执行；允许时执行一次；模型层不运行工具或绕过 DSH 策略 |

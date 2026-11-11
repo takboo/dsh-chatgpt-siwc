@@ -1,4 +1,4 @@
-import { LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { EMPTY_RESPONSE_CODE, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import type { Responses } from 'openai/resources/responses'
 import { z } from 'zod'
@@ -36,6 +36,7 @@ const reasoningOutput = reasoningReplay.extend({
   encrypted_content: reasoningReplay.shape.encrypted_content.nullish(),
   status: z.literal('completed').optional(),
 })
+const reasoningDone = reasoningOutput.extend({ status: z.enum(['completed', 'incomplete']).optional() })
 const completed = z.object({
   status: z.literal('completed').optional(),
   output: z.array(z.discriminatedUnion('type', [message, tool, reasoningOutput])).max(4096),
@@ -44,8 +45,8 @@ const completed = z.object({
 const textDelta = z.object({ output_index: count, content_index: count, delta: z.string() })
 const progress = new Set([
   'response.created', 'response.queued', 'response.in_progress',
-  // SIWC may send metadata between text deltas and the completed event.
-  'response.metadata',
+  // SIWC may send metadata and keepalive between deltas and completion.
+  'response.metadata', 'keepalive',
   'response.output_item.added',
   'response.content_part.added', 'response.content_part.done',
   'response.output_text.done', 'response.output_text.annotation.added',
@@ -170,11 +171,12 @@ export async function* settleResponses(
       }
       case 'response.output_item.done': {
         if (event.item?.type !== 'reasoning') break
-        const item = reasoningOutput.safeParse(event.item)
+        const item = reasoningDone.safeParse(event.item)
         if (!item.success || !count.safeParse(event.output_index).success ||
           reasoningItems.size >= 4096 || reasoningItems.has(event.output_index)) {
           invalidStream('returned an invalid or duplicate reasoning item in response.output_item.done')
         }
+        if (item.data.status === 'incomplete') break
         const replay = reasoningReplay.safeParse(item.data)
         if (replay.success) reasoningItems.set(event.output_index, replay.data)
         break
@@ -219,6 +221,9 @@ export async function* settleResponses(
         const usage = toUsage(result.data.usage)
         if (usage) yield { type: 'usage', usage }
         signal.throwIfAborted()
+        if (blocks.length === 0) {
+          throw new LlmError('ChatGPT completed the response without returning any content.', EMPTY_RESPONSE_CODE)
+        }
         const needsReplay = replay.some((item, index) => item.reasoning || item.phase || item.order !== index)
         yield {
           type: 'finish',

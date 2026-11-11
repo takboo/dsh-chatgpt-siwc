@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { providerId } from '../identity.js'
 
 export const toolNamespace = 'dsh'
-export const callIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,256}$/)
+export const callIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 export const assistantPhase = z.enum(['commentary', 'final_answer'])
 export const reasoningReplay = z.object({
   type: z.literal('reasoning'),
@@ -53,7 +53,8 @@ export function prepareResponse(options: GenerateOptions, registration: string) 
 
   const input: Responses.ResponseInput = []
   const historyCalls = new Set<string>()
-  const pending = new Set<string>()
+  const hostCalls = new Set<string>()
+  const pending = new Map<string, string>()
   if (options.system) input.push({ role: 'developer', content: options.system })
   for (const message of options.messages) {
     if (message.role === 'assistant') {
@@ -77,16 +78,26 @@ export function prepareResponse(options: GenerateOptions, registration: string) 
               input.push({ role: 'assistant', content: block.text, ...(meta?.phase ? { phase: meta.phase } : {}) })
             }
             break
-          case 'tool-call':
-            if (!callIdSchema.safeParse(block.id).success || !block.name || historyCalls.has(block.id) ||
+          case 'tool-call': {
+            if (!block.id || !block.name || hostCalls.has(block.id) ||
               !validToolArguments(block.arguments)) invalidHistory()
-            historyCalls.add(block.id)
-            pending.add(block.id)
+            // Other adapters can use host IDs such as Pi's call_id|item_id.
+            // Keep them in the session and project the same wire ID on both sides.
+            let id: string = block.id
+            if (!callIdSchema.safeParse(id).success) {
+              if (message.source.provider === providerId) invalidHistory()
+              id = 'call_dsh_' + createHash('sha256').update(id).digest('base64url')
+            }
+            if (historyCalls.has(id)) invalidHistory()
+            historyCalls.add(id)
+            hostCalls.add(block.id)
+            pending.set(block.id, id)
             input.push({
               type: 'function_call', namespace: toolNamespace, name: wireName(block.name),
-              call_id: block.id, arguments: block.arguments,
+              call_id: id, arguments: block.arguments,
             })
             break
+          }
           case 'reasoning':
             if (meta?.reasoning) input.push(meta.reasoning)
             else if (message.source.provider === providerId) {
@@ -102,9 +113,11 @@ export function prepareResponse(options: GenerateOptions, registration: string) 
         return block.text
       }).join('')
       if (message.role === 'tool') {
-        if (!pending.delete(message.toolCallId)) invalidHistory()
+        const id = pending.get(message.toolCallId)
+        if (id === undefined) invalidHistory()
+        pending.delete(message.toolCallId)
         input.push({
-          type: 'function_call_output', call_id: message.toolCallId,
+          type: 'function_call_output', call_id: id,
           output: message.isError ? 'Tool execution failed.\n' + text : text,
         })
       } else if (text) {

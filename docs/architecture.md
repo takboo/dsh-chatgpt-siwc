@@ -64,7 +64,7 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - 首轮使用稳定的 `dsh` namespace 和 DSH 投影出的当前工具集。历史调用按确定性的名称映射及原始 call ID 回传，旧声明不会随历史调用重新开放。DSH 默认工具投影会移除 developer 工具变更消息，系统提示变更沿 `systemPromptUpdate: 'in-history'` 保留并投影为 developer。
 - 离线验收使用 DSH 原生压缩引擎和独立的合成摘要路由。SIWC 主请求接收宿主投影后的检查点和保留历史。DSH 把当前可用的 deferred 工具转为即时声明，已移除的工具只保留历史调用及结果。
 - 维护 namespace＋wire name ↔ DSH 工具名的一一映射、call ID 和参数原文。合法编码、长名称、同名、重复 ID、未知 namespace、参数 JSON 错误均有 fixture；未知／越权工具不交给执行层。
-- 工具结果映射回对应 call ID。工具调用只有在响应成功结算、参数完整并通过校验后才视作可执行；部分流和失败 attempt 不产生可执行的已完成工具调用。
+- 工具结果映射回对应 call ID。真实 SIWC Responses 接受至多 64 个字符的 `call_id`。其他 provider 的历史 ID 超过该长度或含有不支持的字符时，出站对调用和结果使用同一个确定性 ID，拒绝碰撞或配对错误。已提交的 DSH 历史保留原 ID。工具调用只有在响应成功结算、参数完整并通过校验后才视作可执行。部分流和失败 attempt 不产生可执行的已完成工具调用。[协议回归](../test/p3/responses.test.mjs)
 - MVP 仅 text＋本地函数工具；向宿主声明准确的 text-only 能力，遵守宿主已有图片 placeholder／文件 handle 投影，不承诺图像理解，也不在 codec 再隐藏丢弃内容。若收到超出声明的原始内容则发送前拒绝。后续按 DSH attachment interface 接入，不能直读任意本机路径替代。
 - 只对有依据的模型能力公布 reasoning effort／context。DSH 能解析省略容量的目录模型，但同一路由 title／compaction 的强制上限以及缺容量时的路由切换需要按[接口快照](research/dsh-contracts.md#主对话与辅助请求)解决。
 
@@ -72,7 +72,8 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 
 - 每个 OpenAI output item/content index 映射到稳定 DSH block index；支持交错文本与多个 tool calls，不依赖增量恰好按单块到达。
 - delta 用于展示，`response.completed` 校验通过后才发成功 finish。`response.failed`、`response.incomplete`、EOF 缺终态、畸形 JSON、取消和超时分别处理。[OpenAI 流事件定义](https://developers.openai.com/api/reference/resources/responses/streaming-events#response.completed)
-- 缺失 `Content-Type` 时按 SSE 解码并继续验证事件及终态，显式声明其他媒体类型时拒绝响应。适配器跳过 `response.metadata` 的内容。`response.completed` 的 `response.status` 可省略，若提供则必须为 `completed`。[实测记录](evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
+- 缺失 `Content-Type` 时按 SSE 解码并继续验证事件及终态，显式声明其他媒体类型时拒绝响应。适配器跳过 `response.metadata` 与 `keepalive`。`response.completed` 的 `response.status` 可省略，若提供则必须为 `completed`。[元数据实测](evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
+- 无内容块的完成事件报告 `EMPTY_RESPONSE` 并保留已知用量。未完成 reasoning 项不能作为重放状态，后续失败终态仍负责结算。HTTP 和 SSE 的上下文溢出使用 DSH 的 `CONTEXT_WINDOW_EXCEEDED`，由宿主决定是否可压缩及重试。[协议回归](../test/p3/responses.test.mjs)
 - TokenUsage 映射 input/output/cache/reasoning，避免重复加总；缺失用量不伪装为已知零消耗。失败可能已计费；若宿主无法表示未知，则省略 usage 并记录非敏感诊断，不制造虚假精确值。订阅消耗不冒充已知美元价格。
 - 需要的 reasoning item／encrypted_content 与 call replay 以有界、版本化 ReplayEnvelope 保存；不存 token、ID token 或 OAuth 响应。恢复时只接受本 adapter 可验证的版本与身份绑定语义；不支持的 replay 明确降级／失败，不悄悄破坏工具关联。
 - 首轮回放在同一注册中读取已结算的加密 reasoning、assistant phase 与输出顺序。带加密推理的历史换注册时明确失败，纯文本历史可以继续投影。

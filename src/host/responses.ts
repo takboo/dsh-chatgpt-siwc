@@ -1,4 +1,4 @@
-import { attributionHeaders, LlmError, ProviderRequestId, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
+import { attributionHeaders, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, ProviderRequestId, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import OpenAI from 'openai'
 import type { InferenceGrant } from './accounts.js'
@@ -33,6 +33,9 @@ function providerFailure(code: string | undefined, status?: number, headers?: He
   }
   if (code === 'subscription_sharing_unsupported_capability') {
     return new LlmError('The ChatGPT route rejected an unsupported request capability.', 'UNSUPPORTED_OPTION', facts)
+  }
+  if (code === 'context_length_exceeded' || code === 'context_window_exceeded') {
+    return new LlmError('The request exceeded the ChatGPT model context window.', CONTEXT_WINDOW_EXCEEDED_CODE, facts)
   }
   if (status === 403 || code === 'chatpass_v2_scope_not_authorized' ||
     code === 'chatpass_v2_invalid_authorization_context' || code === 'subscription_sharing_route_not_supported') {
@@ -92,7 +95,7 @@ export async function* responses(
       throw new LlmError('ChatGPT did not return a Responses event stream.', 'INVALID_RESPONSE')
     }
     yield* settleResponses(data, request.offered, request.historyCalls, grant.registration, signal, grant.assertCurrent,
-      code => providerFailure(code, undefined, response.headers), contentType !== null)
+      code => providerFailure(code, response.status, response.headers), contentType !== null)
   } catch (error) {
     if (deadline.signal.aborted || error instanceof OpenAI.APIConnectionTimeoutError) {
       throw new LlmError('The ChatGPT request timed out.', 'TIMEOUT')
@@ -101,8 +104,8 @@ export async function* responses(
       throw new LlmError('The ChatGPT request was cancelled.', 'ABORTED')
     }
     if (error instanceof LlmError) {
-      if (error.code === 'INVALID_RESPONSE' && upstream) {
-        throw new LlmError(error.message, error.code, responseFacts(upstream.status, upstream.headers))
+      if (upstream && error.failure.status === undefined) {
+        throw new LlmError(error.message, error.code, { ...responseFacts(upstream.status, upstream.headers), ...error.failure })
       }
       throw error
     }
@@ -111,13 +114,14 @@ export async function* responses(
       throw new LlmError('ChatGPT authorization could not be obtained for this request.', code)
     }
     if (error instanceof OpenAI.APIError && !(error instanceof OpenAI.APIConnectionError)) {
-      throw providerFailure(error.code ?? undefined, error.status, error.headers)
+      throw providerFailure(error.code ?? undefined, error.status ?? upstream?.status, error.headers ?? upstream?.headers)
     }
     if (error instanceof SyntaxError) {
       throw new LlmError('ChatGPT returned a malformed stream event.', 'INVALID_RESPONSE',
         responseFacts(upstream?.status, upstream?.headers))
     }
-    throw new LlmError('The ChatGPT transport could not complete the request.', 'TRANSPORT')
+    throw new LlmError('The ChatGPT transport could not complete the request.', 'TRANSPORT',
+      responseFacts(upstream?.status, upstream?.headers))
   } finally {
     clearTimeout(timer)
     operation.abort()
