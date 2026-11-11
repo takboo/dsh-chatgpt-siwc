@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import * as ClientGateway from '@deepseek-ai/dsh-api-gateway/client'
+import Authorization from '@deepseek-ai/dsh-authorization'
+import LocalCredentials from '@deepseek-ai/dsh-credentials-local'
 import Llm, { LlmAdapter } from '@deepseek-ai/dsh-llm'
+import * as ClientRegistry from '@deepseek-ai/dsh-typert-registry/client'
 import React from 'react'
+import * as jsxRuntime from 'react/jsx-runtime'
 import { parse } from 'yaml'
 
 const root = new URL('../../', import.meta.url)
@@ -13,8 +20,21 @@ const manifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'
 const [{ insert: rows }] = parse(await readFile(new URL(manifest.dsh.bundle.patch, root), 'utf8'))
 const [row] = rows
 
+async function dependencies(t, ctx) {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-siwc-bundle-'))
+  const backing = ctx.plugin(LocalCredentials, { path: join(directory, 'credentials.yaml'), watch: false })
+  const authorization = ctx.plugin(Authorization)
+  t.after(async () => {
+    await authorization.dispose()
+    await backing.dispose()
+    await rm(directory, { recursive: true, force: true })
+  })
+  await Promise.all([backing, authorization])
+}
+
 test('Cordis loads and unloads the Host row declared in the bundle', async (t) => {
   const ctx = new Context()
+  await dependencies(t, ctx)
   const runtime = ctx.plugin(Llm)
   const loader = ctx.plugin(Loader, { baseUrl: root.href })
   t.after(async () => {
@@ -53,6 +73,7 @@ test('Cordis loads and unloads the Host row declared in the bundle', async (t) =
 
 test('a duplicate route leaves its existing adapter registered', async (t) => {
   const ctx = new Context()
+  await dependencies(t, ctx)
   const runtime = ctx.plugin(Llm)
   await runtime
   const entry = await import(row.name)
@@ -67,7 +88,7 @@ test('a duplicate route leaves its existing adapter registered', async (t) => {
   assert.deepEqual(ctx.llm.listProviders(), [{ id: row.id, name: row.id }])
 })
 
-test('the shipped Client factory contributes settings to the plugin detail only', async () => {
+test('the shipped Client factory mounts the settings call through the DSH Client Gateway', async (t) => {
   let client
   const source = await readFile(new URL(manifest.exports['./client'], root), 'utf8')
   runInNewContext(source, {
@@ -76,38 +97,65 @@ test('the shipped Client factory contributes settings to the plugin detail only'
         load({ id, factory }) {
           assert.equal(id, manifest.name)
           client = factory((external) => {
-            assert.equal(external, 'react')
-            return React
+            if (external === 'react') return React
+            if (external === 'react/jsx-runtime') return jsxRuntime
+            assert.equal(external, '@deepseek-ai/dsh-client-ui-primitives')
+            return { Button: 'button', Tag: 'span' }
           })
         },
       },
     },
   })
-  assert.deepEqual(Array.from(client.inject), ['locale', 'slots'])
+  assert.deepEqual(Array.from(client.inject), ['locale', 'slots', 'remote'])
+  const ctx = new Context()
+  const view = { available: false, authorizing: false, accounts: [], active: null, confirmPlan: false, models: null }
+  const rpc = t.mock.fn(async () => ({ ok: true, value: { ok: true, view } }))
+  const disposeConnection = ctx.provide('connection', {
+    interactions: 'none',
+    rpc: { call: rpc, open: () => assert.fail('This endpoint is unary') },
+  })
+  const registry = ctx.plugin(ClientRegistry)
+  const gateway = ctx.plugin(ClientGateway)
+  await Promise.all([registry, gateway])
   let dictionaries
   let section
-  client.apply({
-    effect(register) { register() },
-    locale: {
-      register(namespace, value) {
-        assert.equal(namespace, row.id)
-        dictionaries = value
-      },
-    },
-    slots: {
-      inject(slot, register) {
-        assert.equal(slot, 'plugins.bundle.config')
-        register()
-      },
-      register(options, render) { section = { options, render } },
+  const disposeLocale = ctx.provide('locale', {
+    register(namespace, value) {
+      assert.equal(namespace, row.id)
+      dictionaries = value
     },
   })
+  const disposeSlots = ctx.provide('slots', {
+    inject(slot, register) {
+      assert.equal(slot, 'plugins.bundle.config')
+      register()
+    },
+    register(options, render) { section = { options, render } },
+  })
+  const mounted = ctx.plugin(client)
+  t.after(async () => {
+    await mounted.dispose()
+    await gateway.dispose()
+    await registry.dispose()
+    await disposeSlots()
+    await disposeLocale()
+    await disposeConnection()
+  })
+  await mounted
   assert.equal(section.options.name, 'plugins.bundle.config')
   assert.equal(section.options.key, manifest.name)
   assert.equal(section.options.locale, row.id)
   for (const language of ['en', 'zh']) {
     const element = section.render({ view: 'page', t: (key) => dictionaries[language][key] })
-    assert.equal(element.props.role, 'status')
-    assert.equal(element.props.children, dictionaries[language].signInUnavailable)
+    assert.equal(typeof element.type, 'function')
+    assert.equal(element.props.t('offline'), dictionaries[language].offline)
+    const result = await element.props.command({ type: 'read' })
+    assert.equal(result.ok, true)
+    assert.equal(result.view.available, false)
   }
+  assert.equal(rpc.mock.callCount(), 2)
+  const [prefix, endpoint, request] = rpc.mock.calls[0].arguments
+  assert.equal(prefix, '/api')
+  assert.equal(endpoint, 'chatgptSiwc/settings')
+  assert.deepEqual(JSON.parse(JSON.stringify(request)), { args: { action: { type: 'read' } } })
 })

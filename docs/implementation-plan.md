@@ -1,6 +1,6 @@
 # 分阶段实施计划
 
-已完成 [P0 首轮离线核对](evidence/p0-offline-2026-11-11.md)，已启动离线 P1。P0 的真实账号验证仍待授权。阶段结果按[验收标准](acceptance.md)判定。
+已完成 [P0 首轮离线核对](evidence/p0-offline-2026-11-11.md)和 [P1 包骨架](evidence/p1-offline-2026-11-11.md)，已进入离线 P2。P0 的真实账号验证仍待授权。阶段结果按[验收标准](acceptance.md)判定。
 
 ## P0：可行性验证与方案锁定
 
@@ -23,7 +23,7 @@
 - [x] TypeScript Host ESM 和 DSH Client factory，标准 manifest、Host export 与独立 bundle patch。engine 固定 `0.2.2-rc.1`，使用宿主 peer。
 - [x] 独立 row／provider、双语展示资源、原创 icon 和分发文件清单。设置入口通过公开 bundle 插槽显示当前构建状态。[基座 PR #8](https://github.com/takboo/dsh-plugin-engineering/blob/1393e85ca4c59afcb9cd0fa23caa8a19640d0f27/docs/distribution.md#已安装插件的展示元信息)
 - [x] 使用 npm 锁文件和 lint、typecheck、build、test、pack 检查。Host 入口验证冻结输入与 effect 释放。
-- [ ] 随 P2／P3 引入时钟、HTTP 和 store 调用时接入可替换测试输入。当前竞争用例使用官方本地 backing 和合成凭据。
+- [x] P2 的 Host 可注入时钟、HTTP 和浏览器启动器，竞争用例使用官方本地 backing 和合成凭据。
 
 离线包骨架的通过条件为隔离 composition 加载、卸载、路由冲突和打包检查均通过。真实安装使用另行授权的隔离 profile。
 
@@ -31,9 +31,11 @@
 
 依赖：P1；P0 账号 gate 通过后才做 live 分支。
 
-- [ ] 首次／后续授权、PKCE/OIDC/issued client ID、scope 与身份绑定。
-- [ ] 实际 backing 的跨进程 refresh rotation、过期、取消、logout race；错误脱敏。
-- [ ] models[] 目录、visibility、空目录、TTL、账号切换失效、GUI 目录更新。
+- [x] 实现首次／后续授权、loopback、PKCE、OIDC/JWKS、issued client ID、scope 与身份绑定。离线 Host 使用可注入传输，默认构建不启用真实账号连接。
+- [x] 在实际本地 backing 上使用合成凭据验证跨进程轮转、写入失败和迟到授权，区分本地清理与远端撤销。
+- [x] 实现 `models[]` 目录、visibility、空目录、TTL、账号切换失效和 DSH 目录通知。插件详情页通过 owner-only Typert 操作查看脱敏状态。
+- [x] 同一离线候选包通过实际 Web 和官方 macOS ARM64 Desktop 的安装、插件详情设置和 Host 状态读取。Web 验证旧版本拒绝与卸载，Desktop 验证重启恢复。[双宿主证据](evidence/p2-host-2026-11-11.md)
+- [ ] 真实账号验证、Host 打开系统浏览器和两个宿主的模型选择器仍待实测。Composer 的 plan 状态随推理路由接入后验证。
 
 退出：A1–A6、C1–C3、S1–S4 全通过，秘密 canary 不出 Host／安全 store。
 

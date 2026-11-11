@@ -1,0 +1,12 @@
+{
+  "admit": {
+    "version": "0.2.2-rc.1",
+    "integrity": "sha512-ijR9UEVYkG15Q/Q79JzvzLBzQOQfc63VLr9n6flpwHPhr5IKn2UxthnSoto/P9l7qGd7pPvI1Ra6TW7LH3oKpg==",
+    "upstreamCommit": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db"
+  },
+  "refuse": {
+    "version": "0.2.1-rc.4",
+    "integrity": "sha512-8gxl6zOi6vx1sDolH+vjh9txrpbXD+t74Z2YfWkEBtR3xP2YEtk0bbLkgLZRnYQgDxCoXitXyXDKn5k0+6iXrg==",
+    "upstreamCommit": "504a01a9578abc2c6f1fb896b1dc322c9fe24f66"
+  }
+}

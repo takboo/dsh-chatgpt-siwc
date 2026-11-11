@@ -1,6 +1,8 @@
 # 验收标准
 
-P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)。从[测试入口](../test/README.md)复跑。下列编号为插件的正式验收，P0 的局部观察尚未结算这些用例。按[证据模板](evidence/README.md)逐项记为 pass、fail、blocked 或 not-run。mandatory 用例全部通过后才进入发布判定。
+P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)。[P2 证据](evidence/p2-offline-2026-11-11.md)记录合成 OAuth、凭据、目录和设置页的观察范围。按[测试入口](../test/README.md)复跑，按[证据模板](evidence/README.md)逐项记为 pass、fail、blocked 或 not-run。mandatory 用例全部通过后才进入发布判定。
+
+[P2 双宿主报告](evidence/p2-host-2026-11-11.md)记录离线包的实际安装和设置页观察。L5、U1、R1 的真实账号部分仍待验。
 
 ## 自动化与协议（mandatory）
 

@@ -5,8 +5,8 @@ const { name } = JSON.parse(await readFile(new URL('../package.json', import.met
 
 await Promise.all([
   build({
-    entryPoints: ['src/index.ts'],
-    outfile: 'dist/index.js',
+    entryPoints: ['src/index.ts', 'src/typert.ts'],
+    outdir: 'dist',
     bundle: true,
     packages: 'external',
     platform: 'node',
@@ -20,7 +20,7 @@ await Promise.all([
     platform: 'browser',
     format: 'cjs',
     target: 'es2022',
-    external: ['react'],
+    external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives'],
     banner: {
       js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(name)}, factory: (require) => {\nconst module = { exports: {} };\nconst exports = module.exports;`,
     },

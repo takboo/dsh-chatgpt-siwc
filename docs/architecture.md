@@ -1,6 +1,6 @@
 # 实施方案
 
-状态：设计基线，未实现。决策门见[实施计划](implementation-plan.md)，外部事实见[可行性](research/feasibility.md)。
+状态：P2 账号、凭据与模型目录已离线实现。默认 Host 构建停用真实账号连接，推理与工具闭环仍在 P3。决策门见[实施计划](implementation-plan.md)，外部事实见[可行性](research/feasibility.md)。
 
 ## 1. Seam 与模块职责
 
@@ -37,7 +37,7 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - 必须实现 `listModels` 与 `resolveModel`；目录只显示 `visibility == "list"` 项，保留服务器顺序，UI 用 display_name、请求用 slug。目录变化使用 `llm/models-updated` emit；可配置 provider 目录只有在 settings namespace 契约完成后才注册，不能返回虚假可编辑项。
 - 模型发现与 GUI 的公开读取只返回元数据／状态，不返回 OAuth token；特权请求留在 Host。
 - 若缺失 hard dependency，插件明确 inactive 或加载失败；不绕过 Service 自行寻找宿主私有文件。
-- 插件管理页用 `plugins.bundle.config` 按包名注册设置，放在插件详情。P1 显示本构建的登录状态。账号实现加入 Continue with ChatGPT、活动账号、切换和登出，首次启用 plan 确认一次。输入框附近用 `conversation.input.dock` 展示 Using ChatGPT plan 和 Manage usage，限额状态同样提供用量入口。[接口快照](research/dsh-contracts.md#client-公开扩展) · [SIWC UX](https://developers.openai.com/siwc/ui-ux-guidelines.md)
+- 插件管理页用 `plugins.bundle.config` 按包名注册设置。账号操作经 owner-only Typert 调用，Client 读取脱敏状态。P2 的 Chromium fixture 覆盖 Continue with ChatGPT、活动账号、首次确认、目录和用量指引。输入框附近的 plan 标识随 P3 推理路由验证。[接口快照](research/dsh-contracts.md#client-公开扩展) · [SIWC UX](https://developers.openai.com/siwc/ui-ux-guidelines.md)
 
 ## 3. OAuth 与 grant 生命周期
 

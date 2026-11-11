@@ -25,7 +25,7 @@ try {
     if (!path.includes('*')) files.add(posix.normalize(path))
   }
   assert.deepEqual(new Set(pack.files.map(({ path }) => path)), files)
-  for (const entry of [manifest.exports['.'], manifest.exports['./client']]) {
+  for (const entry of [manifest.exports['.'], manifest.exports['./client'], manifest.exports['./typert']]) {
     assert.equal(read(posix.normalize(entry)), await readFile(entry, 'utf8'))
   }
 
@@ -36,7 +36,7 @@ try {
   }
 
   const hash = createHash('sha256').update(await readFile(tarball)).digest('hex')
-  const destination = join('artifacts', 'p1', hash)
+  const destination = join('artifacts', 'pack', hash)
   await mkdir(destination, { recursive: true })
   const output = join(destination, pack.filename)
   await copyFile(tarball, output)
