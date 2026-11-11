@@ -3,7 +3,7 @@ import type {} from '@deepseek-ai/dsh-authorization'
 import { credentialKeyScope } from '@deepseek-ai/dsh-credentials'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { providerId } from './identity.js'
+import { planLabel, providerId } from './identity.js'
 import { Accounts } from './host/accounts.js'
 import { OAuth } from './host/oauth.js'
 import type { OAuthDependencies } from './host/oauth.js'
@@ -27,6 +27,7 @@ class ChatGptAdapter extends LlmAdapter {
     try {
       return (await this.accounts.models()).map(model => ({
         ...model, provider: providerId, inputModalities: ['text'],
+        badge: { text: planLabel, tone: 'success' },
       }))
     } catch {
       // The settings view offers the explicit retry and the safe error detail.

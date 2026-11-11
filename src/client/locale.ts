@@ -1,5 +1,7 @@
+import { planLabel } from '../identity.js'
+
 export const en = {
-  account: 'ChatGPT account', usingPlan: 'Using ChatGPT plan', savedAccounts: 'Saved accounts',
+  account: 'ChatGPT account', usingPlan: planLabel.en, savedAccounts: 'Saved accounts',
   loading: 'Reading account status…', offline: 'This offline build cannot connect to a real account.',
   emptyAccounts: 'Connect an account to see the models available with its plan.',
   active: 'Active', connected: 'Connected', identityOnly: 'Plan access missing', signedOut: 'Signed out',
@@ -30,7 +32,7 @@ export const en = {
 }
 
 export const zh: Record<keyof typeof en, string> = {
-  account: 'ChatGPT 账号', usingPlan: '正在使用 ChatGPT 订阅', savedAccounts: '已保存的账号',
+  account: 'ChatGPT 账号', usingPlan: planLabel.zh, savedAccounts: '已保存的账号',
   loading: '正在读取账号状态…', offline: '当前为离线构建，暂未开放真实账号连接。',
   emptyAccounts: '连接账号后，可查看其订阅可用的模型。',
   active: '当前账号', connected: '已连接', identityOnly: '未授权使用订阅', signedOut: '已退出',

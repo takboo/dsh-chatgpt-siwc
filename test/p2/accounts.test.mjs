@@ -33,6 +33,9 @@ test('DSH authorization performs verified first login, reauthorization and nativ
   assert.equal(before.confirmPlan, true)
   await accounts.confirm()
   const catalog = await ctx.llm.listModels('chatgpt-siwc')
+  assert.deepEqual(catalog.map(model => model.badge), catalog.map(() => ({
+    text: { en: 'Using ChatGPT plan', zh: '正在使用 ChatGPT 订阅' }, tone: 'success',
+  })))
   assert.deepEqual(catalog.map(({ id, name }) => ({ id, name })), [
     { id: 'fixture-z', name: 'Fixture Z' }, { id: 'fixture-a', name: 'Fixture A' },
   ])
