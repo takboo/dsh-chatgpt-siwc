@@ -30,14 +30,20 @@
 
 - refresh 必须 `modifyRecord` 内重读；令牌轮转写回成功前不把新 token 分发给请求。网络结果含糊而 refresh token 可能已失效时停止盲重试，要求重新授权。
 - logout 先使当前 generation 失效并取消调用／登录；与刷新使用同一记录的串行语义，标记 signing-out 阻止新消费和刷新。仍持有 refresh token 时尝试远端撤销，然后原子清 access/refresh/ID token，保留最小 account/client 映射及 signed-out generation。所有异步完成提交前重查 generation；新增登录使用新 generation，旧 writer 不可复活。
-- `modifyRecord` 返回 undefined 意味保持原值；清 token 必须提交实际更新 payload。显式“忘记注册”才用 `deleteRecord` 删除该注册映射；删除、清 token 与并发刷新的顺序需在真实 backing 上证明，不能仅测内存 mutex。
+- `modifyRecord` 返回 `undefined` 时保留原值，清 token 须提交更新后的 payload。若后续增加「忘记注册」，使用独立的 `deleteRecord` 操作，并在实际 backing 上验证它与登出、刷新并发时的顺序。
 - 若刷新交换后写入失败，当前 Host 记住该世代并停止再次消费或轮转，提示重新授权。故障进程的这条标记在内存中，其他进程依赖 backing 中的已提交记录及上游拒绝旧 refresh token。
 - 撤销按 [Accounts and sessions](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions.md)：从可信 discovery 获取 revocation_endpoint，以 form POST 发送 refresh token、`token_type_hint=refresh_token`、issued client_id。空 200（含 token 已无效）为成功；网络／5xx 可在 token 仍在且有界的窗口退避。未确认则完成本地清除，并显示“本地已退出，远端撤销未确认”，引导 ChatGPT Settings Disconnect。不可硬猜 endpoint，亦不把本 session revoke 称为删除 client 或撤销全部 host。
 - 本地退出不等于所有历史 token 在远端失效；卸载插件也不等于撤销。提供显式登出和孤立 record 清理说明，不能卸载时删除其他 owner 的凭据。
 - 每个 `DSH_HOME` 独立保存稳定 host ID。每个 profile 仅激活一个已验证且具备推理权限的注册。切换取消旧账号请求及缓存，其他已保存注册仍可由用户选择。
 - DSH `0.2.2-rc.1` 的 `session.commit(record)` 使用固定值写入，进入提交后取消不再撤回。再授权若覆盖已有记录，须用锁内 generation 检查处理 logout 和切换竞争。合成挂载试验只覆盖基本提交。[宿主提交语义](research/dsh-contracts.md#授权提交与账号)
-- 含 `id_token_hint` 或个人信息的授权 URL 仅由 Host 打开系统浏览器。Client 及 CLI 输出只呈现必要的安全操作和状态，异常与日志须脱敏。
+- P4 工作树候选通过同一个 IPv4 回环监听器为每次浏览器交接签发一次性随机路径。系统启动器的参数只有该回环地址。首次匹配的 GET 在 Host 内取出授权 URL，发送带 `no-store` 和 `no-referrer` 的重定向。路径随取消、超时、完成或卸载一起失效。授权 URL 和返回页按敏感数据处理，Client 和启动器错误只返回脱敏状态。
 - P3 适配器在准备调用时捕获注册与记录世代，在发送前和结算前核对。SDK 关闭日志与自动重试。流失败只返回分类和经检查的 HTTP 事实，工具调用在成功终态整体验证后才交给 DSH。包含加密推理的回放与本地注册绑定。
+
+## 真实账号复测
+
+- 为减少重复动态注册，同一宿主上的复测沿用专用隔离 `DSH_HOME` 和 profile。更新候选包或重启时保留本地注册映射及稳定的 `ext_agent_host_id`。
+- 同一 ChatGPT 账号和工作区已有注册时，在原账号行选择「重新登录」（`Sign in again`），复用已签发的 `client_id`。重新授权失败时先排查原注册的错误。仅在没有可复用的注册或用例明确覆盖首次注册时，才使用 `dynamic_agent_client`。[OpenAI 授权流程](https://developers.openai.com/siwc/token-sharing-open-source/sign-in#2-start-authorization)
+- 每轮结束按上文退出、尝试远端撤销并清除本地 access、refresh 和 ID token。后续复测所需的注册映射和宿主 ID 保留在本机受限试验目录。取证时只报告标识是否复用及撤销结果，遵循[证据规则](evidence/README.md)。[OpenAI 账号与会话](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions#end-the-renewable-session)
 
 ## 留存与诊断
 

@@ -8,6 +8,7 @@
 - 研究、依赖或准入判断变化时更新[可行性](docs/research/feasibility.md)，保留主源、日期及事实／推论／待实测的区分。
 - 使用 DSH 原生 llm、authorization、credentials seam；只注册自身 provider。每次请求保持单次推理，工具执行和重试调度留给 DSH。
 - 安装、真实账号登录和发布须获得对应授权；在隔离 profile 执行，并按[证据模板](docs/evidence/README.md)记录。密钥和未脱敏 OAuth 数据留在仓库之外。
+- 真实账号复测按[注册复用规范](docs/security.md#真实账号复测)沿用已有 `client_id`。
 
 ## Git 提交
 

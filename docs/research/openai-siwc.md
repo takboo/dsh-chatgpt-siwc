@@ -1,10 +1,9 @@
 # OpenAI Sign in with ChatGPT 对本地／开源 DSH 模型 Provider 的可行性研究
 
 - 研究日期：2026-11-07（Asia/Shanghai）。本文是当日官方网页快照的分析，不保证预览接口或准入规则长期不变。
-- 2026-11-11 的核对及当前判定见 [P0 报告](../evidence/p0-offline-2026-11-11.md#openai-公开契约和准入)。套餐表述保留在各自的日期快照中。
+- 后续公开资料核对见 [P0 报告](../evidence/p0-offline-2026-11-11.md#openai-公开契约和准入)，当前项目判定见[可行性结论](feasibility.md)。套餐表述保留在各自的日期快照中。
 - 范围：OpenAI 官方 SIWC/OAuth/Responses 文档及官方用户帮助页；不重复研究已安装 DSH 的扩展接口、不读取其宿主实现。
-- 执行边界：没有登录、授权、安装、调用带凭证 API 或修改项目文件；只访问公开资料并生成本报告。目标文件写前两次检查均不存在，故使用指定名称，未覆盖已有文件。
-- 标记：**事实**＝官方资料明确陈述；**推论／建议**＝由事实导出的实现判断；**待实测／确认**＝公开资料不足或尚未用真实凭证验证。所有验收条目都是未来要求，不代表已经通过。
+- 研究采用公开资料，日期以本快照为准。**事实**表示官方资料明确陈述，**推论／建议**表示据此做出的实现判断，**待实测／确认**表示当时尚无实测结果。
 
 ## 一、结论
 
@@ -245,9 +244,9 @@
 3. 发布前向 OpenAI 确认 DSH 的发行方式、免费/Go/Plus/Pro/Business/Enterprise/workspace 覆盖及地区政策；本文没有证据承诺 Business/Enterprise/Edu 或任意地区支持。
 4. 不承诺任何账号的确切模型、无限时长或固定成本。发布记录绑定当时官方文档日期和实测矩阵。
 
-## 八、可落地的验收要求
+## 八、立项时的验收建议
 
-以下均为待实现／待执行。P0 是公开可用 Provider 的最低门槛；文档研究完成不等于这些项目已验收。
+以下建议保留立项时的范围和来源。当前用例及阶段状态分别维护在[验收标准](../acceptance.md)和[实施计划](../implementation-plan.md)。
 
 ### A. 不登录即可完成的契约与单元测试（P0）
 
@@ -270,7 +269,7 @@
 - [ ] **恢复策略：** terminal refresh code 才清不可用 token 并复用 issued ID；5xx/offline 不清；invalid_client 显示配置问题而非无限登录。[S6]
 - [ ] **无泄漏：** 文件、导出设置、browser storage、崩溃日志、支持摘要和 authorize URL 全面检查不含 token/verifier/code；ID-token hint URL 也脱敏。[S2][S3]
 
-### C. 以后由用户明确授权的最小实测（P0，当前未做）
+### C. 当时建议的最小实测（需授权）
 
 - [ ] 一台本地 host 首次授权：真实 actual name、稳定 host ID、收到 issued ID、验证 token；凭证权限与落盘正确；不保存动态入口。
 - [ ] 同 host 再授权：复用 issued ID/host ID；id_token_hint 有/无路径；端口变化但 callback path 固定；选错账号不能覆盖原注册。

@@ -1,6 +1,6 @@
 # 可行性结论与复用决策
 
-2026-11-11 更新。**DSH 公开 Host 接口支持独立 provider 接入。P2 离线包已验证实际 Web 与签名 macOS Desktop，P3 合成推理已通过隔离验收。真实账号推理仍待实测。** [P0 证据](../evidence/p0-offline-2026-11-11.md) · [P3 验收](../evidence/p3-acceptance-2026-11-11.md)
+2026-11-11 更新。DSH 公开 Host 接口支持独立 provider 接入。P3 已通过合成推理和隔离宿主验收。P4 本地候选在一个授权的本机 Web 账号及工作区中完成了目录读取和最小文本推理。[P3 验收](../evidence/p3-acceptance-2026-11-11.md) · [P4 实测](../evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
 
 ## 分层结论
 
@@ -10,10 +10,10 @@
 | DSH 原生流程 | 隔离 composition 已核对 | 已发布的 `0.2.2-rc.1` 接口可挂载模型、授权和凭据。[宿主快照](dsh-contracts.md) |
 | 只改现有 provider 配置 | 当前独立路由不满足 | pi-ai 公开路径发送裸函数及显式 system，拒绝 `models[]`，无法按现有配置满足本项目契约。[抓包结果](../evidence/p0-offline-2026-11-11.md#pi-ai-对照) |
 | 专用 Adapter | 已选设计基线 | 自有 route，使用 DSH interface，实现 SIWC 请求转换、错误映射与终态判断 |
-| 官方 SDK | P3 Host 固定 `openai@7.55.0` | 官方预览要求 `store:false`、`stream:true` 和 namespaced functions。合成测试捕获实际 SDK 请求，确认固定端点、单次发送、关闭重试及终态处理。真实工作区的模型与字段支持待验。 [官方推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) · [预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) · [P3 证据](../evidence/p3-offline-2026-11-11.md) |
-| 本项目准入 | 选定 OSS／本地路径 | 项目采用 MIT。插件免费，用户在本机 Web 或官方 Desktop 自管账号和凭据。真实注册、工作区推理权限和配额待实测。[许可证](../../LICENSE) · [SIWC Overview](https://developers.openai.com/siwc/token-sharing-open-source) |
-| 账号／workspace／模型可用 | 待实测 | 登录成功不代表授予直接推理；scope、目录、completed inference 分别验证 |
-| 发布／多版本支持 | 未验证 | 已有 P2 单个目标版本的离线宿主证据。发布和 P3 实际宿主行为仍待验证。 [P2 双宿主证据](../evidence/p2-host-2026-11-11.md) |
+| 官方 SDK | Host 固定 `openai@7.55.0` | 官方预览要求 `store:false`、`stream:true` 和 namespaced functions。合成测试核对固定端点、单次发送和终态，真实工具回传待验。[官方推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) · [预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) · [P3 证据](../evidence/p3-offline-2026-11-11.md) |
+| 本项目准入 | 选定 OSS／本地路径 | 项目采用 MIT。插件免费，用户在本机 Web 或官方 Desktop 自管账号和凭据。[许可证](../../LICENSE) · [SIWC Overview](https://developers.openai.com/siwc/token-sharing-open-source) |
+| 账号／workspace／模型可用 | 已实测一个工作区 | P4 工作树候选在本机 Web 完成目录和 `gpt-6.1-sol` 的最小文本推理。其他工作区、模型、用量限制和 Desktop 真实账号按实际验收结果记录。[P4 实测](../evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过) |
+| 发布／多版本支持 | 待验收 | 离线宿主结果限定在固定 DSH 版本。完整宿主支持范围和发布条件见[实施计划](../implementation-plan.md)。[P2 双宿主证据](../evidence/p2-host-2026-11-11.md) |
 
 ## 选择与取舍
 
@@ -22,16 +22,9 @@
 3. 最小实现优先选经 P0 核对的官方 SDK 作为 Host 内部传输。保持低层调用与每 attempt 单次发送，在插件内限制请求字段，按 `response.completed` 判定成功。
 4. 批准最小实现时复核该 SDK 版本及维护状态。变更版本或改用直接 HTTP/SSE 时复跑相同协议用例。
 
-## P0 硬门槛
+## 验收入口
 
-- **准入**：MIT 和本地免费形态已确定。该决定用于离线实施，实际账号与工作区资格见最小账号验证。
-- **公开契约**：最小 adapter／授权 flow／目录已通过隔离 fixture。产品 Host／Client 注入与加载留待后续阶段。
-- **DSH 兼容**：落实主对话、title、compaction、切换和 resume 的支持边界，使用公开路由配置解决强制上限与容量要求。
-- **协议**：已核对 SDK 字段传输和终态暴露。后续验证生产 codec 对 namespace、replay、EOF、重复终态和部分工具调用的处理。
-- **账号生命周期与 UX**：验证同一注册的登录、refresh 与 logout 世代隔离。确定安全浏览器启动、多个注册切换和 plan 用量 UI 的公开路径。
-- **账号验证**：需用户另行授权后，完成一次自身 app 身份登录、目录与最小推理；被平台拒绝则保留原始安全错误分类，不自动改走 backend-api。
-
-P0 不通过时记录具体阻断和下一步；不得把“写好了文档”或“安装成功”升级成“订阅推理已可用”。
+设计进入条件、最小账号验证和剩余工作由[实施计划](../implementation-plan.md)维护。主对话、辅助路由、会话恢复、账号生命周期和发布通过条件由[验收标准](../acceptance.md)维护。
 
 ## 范围
 

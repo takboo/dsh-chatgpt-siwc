@@ -1,5 +1,35 @@
 # 测试入口
 
+## P4 交互验收
+
+本地 Web 的离线回归走下方固定 Linux Chromium 入口。macOS Desktop 的人工交接使用同一候选包，从锁定基座的共享 Tart 基线创建本轮专用来宾。按[验收标准](../docs/acceptance.md)分别记录宿主观察、账号验证和真实推理。
+
+1. 按[隔离宿主](#p2-隔离宿主)准备输入。核对基座 checkout 的 origin、tag 和 SHA，以及共享 `TART_HOME` 的基线、空间和 `desktop-job.lock`。取得该锁后克隆本轮唯一命名的来宾，确认克隆和基线身份，结束后只清理本轮克隆和本轮持有的锁。
+2. 用 Tart 原生窗口启动来宾。演练采用 `--net-host --no-audio --no-clipboard --no-usb-accessories`，仅挂载本轮输入目录且为只读。来宾内为应用建立独立 `HOME`、`DSH_HOME` 和用户数据目录，核对 Desktop 签名、版本与候选包摘要。
+3. 用合成的页面和测试标记演练交接。双方在同一 Tart 窗口轮流操作，接回后核对对方留下的标记和窗口状态。将窗口可见、自动操作、人工操作、接回四项分别记录。按离线范围复跑插件安装、设置页和重启，使用独立的合成授权测试验证账号逻辑。
+4. 联机来宾经本机 Clash TUN 出网。先用无凭据请求核对来宾 DNS 和 TLS，并用 Clash 连接记录或 TUN 接口证据确认同一请求经过 TUN。宿主路由或来宾能访问网页只作为预检。路径未确认时暂停联网验收。
+5. 一次性来宾结束时退出应用、停止并回收来宾，复查基线和实验室锁。共享基线和来宾磁盘快照不承载真实账号。
+
+联机步骤使用明确支持 `enableLiveOAuth` 的 P4 候选包。当前提交的 P3 实现用于离线复跑。候选包与源码快照的对应关系见[证据索引](../docs/evidence/README.md)。
+
+在隔离 macOS 或 Linux Host 安装联机候选包后，把下面的行加入该 profile 的 `cordis.patch.yml`。若文件以空列表 `[]` 结束，用下面的列表替换 `[]`。保存后重启 Host。Linux 桌面需要可用的 `xdg-open` 和本机浏览器。`true` 为 YAML 布尔值。
+
+```yaml
+- id: chatgpt-siwc
+  config:
+    enableLiveOAuth: true
+```
+
+回归时先观察默认设置页的离线状态，再应用上述配置，核对登录按钮出现。仅宿主网络可用于验证打开浏览器、回环交接和取消。真实账号步骤使用通过无凭据联机预检的隔离 profile。
+
+已验证的无凭据联机配置使用宿主的限源 CONNECT 代理，经 Clash TUN 解析并连接两个官方公开目标。Safari 使用来宾系统代理，Host 使用来宾回环转发。开新来宾后复核代理读回、回环绕过、TLS 和 TUN 握手，再进入真实账号步骤。[联机预检记录](../docs/evidence/p4-candidate-2026-11-11.md#预检出网)
+
+### 真实账号复测
+
+1. 安装和账号使用获授权、候选包就绪且联机预检通过后，按[注册复用规范](../docs/security.md#真实账号复测)准备专用隔离 `DSH_HOME`。已有注册的复测在安装候选包后核对原账号行仍可用。
+2. 由用户在宿主浏览器亲自登录、验证和授权。已有注册时从对应账号行进入「重新登录」。在浏览器交接期间暂停自动操作和取证，回到 DSH 后再继续。按 L5、B1、U1 和 R1–R3 记录脱敏状态、请求 ID 与用量可见性。
+3. 实测后在插件中退出并确认远端撤销。远端状态未知时由用户在 ChatGPT 设置中断开应用。重新授权用例在宿主内比对前后的客户端 ID 和宿主 ID，按[项目模板](../docs/evidence/README.md)记录是否复用及撤销结果。关闭宿主进程。计划后续复测时，保留已退出的专用隔离 `DSH_HOME`。
+
 ## P3 离线 Responses
 
 在根目录执行 `npm test`，或构建后执行 `node --test --test-timeout=15000 test/p3/*.test.mjs`。测试通过已发布的 DSH LLM runtime 和合成 OAuth 驱动打包适配器，捕获实际 SDK HTTP 请求并用 SSE fixture 回应。覆盖文本、用量、namespace function 的两轮交换、重建 adapter 后回放、异常终态和取消。[首轮证据](../docs/evidence/p3-offline-2026-11-11.md)记录观察范围。
@@ -18,7 +48,7 @@ bash "$base/scripts/run-container.sh" cli test/p2/host-targets.json \
 
 ## P2 离线账号和界面
 
-按下方安装锁定依赖。根目录的 `npm test` 构建包并执行 P1／P2 测试，覆盖 loopback、合成签名、真实本地 backing、DSH Typert 和目录。替身传输只接受测试中的固定端点。
+按 [P1 包骨架](#p1-包骨架)安装锁定依赖。在根目录构建后运行 `node --test --test-timeout=15000 test/p2/*.test.mjs`，核对 loopback、合成签名、实际本地 backing、DSH Typert 和目录。替身传输只接受测试中的固定端点。
 
 设置页的浏览器 fixture 使用同一份构建和锁定 DSH 源码中的 Button、Tag 与主题 token。准备下方配置检查所用的 DSH 源码，赋值给 `dsh_source`，再从根目录执行：
 

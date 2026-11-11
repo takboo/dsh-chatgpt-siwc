@@ -1,12 +1,6 @@
 # 验收标准
 
-P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)。[P2 证据](evidence/p2-offline-2026-11-11.md)记录合成 OAuth、凭据、目录和设置页的观察范围。按[测试入口](../test/README.md)复跑，按[证据模板](evidence/README.md)逐项记为 pass、fail、blocked 或 not-run。mandatory 用例全部通过后才进入发布判定。
-
-[P2 双宿主报告](evidence/p2-host-2026-11-11.md)记录离线包的实际安装和设置页观察。L5、U1、R1 的真实账号部分仍待验。
-
-[P3 首轮证据](evidence/p3-offline-2026-11-11.md)记录 Responses 适配器在发布版 DSH LLM route 上的合成观察。[P3 隔离宿主证据](evidence/p3-native-2026-11-11.md)补充原生审批、文件沙箱、宿主重试及 JSONL 会话恢复，覆盖 T4、L3 和 L4 的本轮场景。
-
-[P3 离线验收矩阵](evidence/p3-acceptance-2026-11-11.md)记录 W1–W6、T1–T4、L1–L4 的同包复跑结果，以及 Web、Desktop 与真实账号的后续验收边界。
+按[测试入口](../test/README.md)复跑，按[证据模板](evidence/README.md#记录模板)逐项记为 `pass`、`fail`、`blocked` 或 `not-run`。当前阶段见[实施计划](implementation-plan.md)，已有结果按候选包查阅[证据索引](evidence/README.md)。
 
 ## 自动化与协议（mandatory）
 
@@ -24,8 +18,8 @@ P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)�
 | W1 | 最终 HTTP 请求捕获（可用替身传输） | public origin、正确路径与 Bearer 授权，使用 DSH `attributionHeaders()`；OAuth app/host 参数另由 A1 核对；store:false、stream:true，SDK 自动 retry 关闭 |
 | W2 | 温度、maxTokens、stop 等不支持控制 | 出网前明确 unsupported；默认不注入禁用字段；不静默忽略显式配置 |
 | W3 | 多轮／压缩 history、developer 更新、工具结果 | 发送当前完整上下文且顺序语义正确；无 previous_response_id、system input、隐藏额外提示或丢历史 |
-| W4 | EOF、failed、incomplete、malformed、HTTP 200 后中断 | 仅 response.completed 认作成功；每个 attempt 一个终态；部分工具不进入执行队列 |
-| W5 | 交错 delta／多个 tools／重复终态与未知事件 | block index 稳定；JSON／ID 对应准确；无重复 usage/finish；未知影响语义事件安全失败 |
+| W4 | 缺失媒体类型、EOF、failed、incomplete、malformed、HTTP 200 后中断 | 缺失 `Content-Type` 时按 SSE 验证；仅有效 `response.completed` 认作成功；每个 attempt 一个终态；部分工具不进入执行队列 |
+| W5 | 交错 delta／多个 tools／元数据／重复终态与未知事件 | block index 稳定；JSON／ID 对应准确；忽略 `response.metadata` 的内容；无重复 usage/finish；未知影响语义事件安全失败 |
 | W6 | usage 有／缺／含 cache/reasoning／失败已消耗 | 宿主字段准确且不重复计数；未知不伪装精确零或美元费用 |
 | T1 | 多个 namespace function tools 与工具结果 | wire 分组合法；返回逆映射为原 DSH 名称／call ID；结果正确进入下一次请求 |
 | T2 | 长名、碰撞、未知 namespace、重复 call ID、畸形参数 | 可逆映射无碰撞；越权／畸形请求在执行前失败，不被任意路由 |
@@ -50,11 +44,11 @@ P0 已执行[隔离 seam 与协议 fixture](evidence/p0-offline-2026-11-11.md)�
 | B2 | 实际 packed bundle 与语言资源 | 相同包摘要贯穿 pack/install；入口/patch/locales/icon 齐全；中文／英文无模板 fallback |
 | R1 | 真实 eligible 账号、自身 app 登录与 catalog | 展示真实 app；实际 scope/resource 合格；模型目录属于当前 workspace，凭据不外泄 |
 | R2 | 真实文本→工具审批→执行→模型完成 | response.completed 与 DSH settlement 对应；至少一轮工具结果回传；真实订阅授权而非 API key 或旧 Codex 凭据 |
-| R3 | 实机 stop、token refresh、重启续接、logout | 单独记录全部结果；退出后不能再用旧授权，重登录可恢复；远端撤销另记 |
+| R3 | 实机 stop、token refresh、重启续接、logout | 分别记录结果。验证退出后插件停止使用旧授权，重登录复用已签发的 client ID 和原宿主 ID 并恢复访问。单列远端撤销结果。[复测流程](../test/README.md#真实账号复测) |
 
 ## 完成判定与阻断
 
-- P0 报告可同时有“静态可行”与“账号验证未执行”，不升级成生产可用。
+- 各项结果绑定实际验证的版本、候选包和场景。mandatory 用例全部通过后才进入发布判定。
 - 研究文档完成、实现完成、自动化通过、宿主加载、GUI 观察、真实推理和发布是独立状态。
 - 任何准入不明、identity/aud/nonce 未验证、刷新 race、秘密泄漏、工具越权、无 completed 被当成功、会话不可恢复，均为 release blocker。
 - 上游 preview 未支持的功能以明确 unsupported 关闭，不借用其他 app 身份或换非公开 endpoint 消除阻断。

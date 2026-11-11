@@ -1,24 +1,22 @@
 # 分阶段实施计划
 
-已完成 [P0 首轮离线核对](evidence/p0-offline-2026-11-11.md)、[P1 包骨架](evidence/p1-offline-2026-11-11.md)、[P2 离线双宿主验证](evidence/p2-host-2026-11-11.md)和 [P3 离线验收](evidence/p3-acceptance-2026-11-11.md)。P0 的真实账号验证仍待授权。阶段结果按[验收标准](acceptance.md)判定。
+已提交的实现基线通过 [P3 离线验收](evidence/p3-acceptance-2026-11-11.md)。当前推进 [P4 实机验收](#p4隔离-profile-与真实账号验收)，实测结论对应报告中标识的本地工作树候选。通过条件见[验收标准](acceptance.md)，各阶段原始记录见[证据索引](evidence/README.md)。
 
 ## P0：可行性验证与方案锁定
 
 基线为 DSH `0.2.2-rc.1`。使用[基座锁](../dsh-engineering.lock.json)及[离线复跑入口](../test/README.md)。
 
-- [x] 确定 MIT 许可、插件免费、本地运行、用户自管账号和凭据，按 OSS／本地 SIWC 路径实施。实际账号与工作区的推理资格待实测。[许可证](../LICENSE)
+- [x] 确定 MIT 许可、插件免费、本地运行、用户自管账号和凭据，按 OSS／本地 SIWC 路径实施。[许可证](../LICENSE)
 - [x] 在隔离 Cordis composition 编译、挂载及释放公开 adapter 和授权 flow。用合成 grant 和 `models[]` 核对目录、通知及省略 context 的行为。
 - [x] 用已发布的 DSH pi-ai adapter 与 pi-ai `1.3.0` 捕获请求和流。独立路由的请求、目录和用量有明确缺口，选择专用 adapter。
 - [x] 用 `openai@7.55.0` 核对请求类型、namespace、replay 请求字段、取消、单次发送及原始 SSE 终态。选为候选 transport，协议校验与结算由插件负责。
-- [x] 首版同时以本地 Web 和官方 Desktop 为目标。隔离试验 profile 停用 LLM 自动标题、自动压缩及手动 `/compact`，验证主对话、模型切换与重启恢复。需要辅助模型时由用户显式配置路由。真实宿主结果按 L5 分别记录。
-- [x] 设置使用插件详情页的 `plugins.bundle.config`。Host 打开系统浏览器并处理回调。每个 `DSH_HOME` 固定 Host ID，注册各自存储，每个 profile 只激活一个。使用锁内 `generation` 校验，先做合成竞争验证。
-- [ ] 经另行授权，做自身 app 身份的首次登录＋目录＋最小推理；失败区分准入与实现错误。
-
-离线 P1 依上述已确定的范围推进。P0 退出另需经授权的最小账号验证。
+- [x] 首版同时以本地 Web 和官方 Desktop 为目标。确定隔离 profile 的辅助路由边界，以及主对话、模型切换和重启恢复用例。真实宿主结果按 L5 分别记录。
+- [x] 确定插件详情设置入口、Host 浏览器回调、每个 `DSH_HOME` 的稳定宿主 ID 和账号隔离方案。
+- [x] P4 本地候选已用自身 app 身份完成经授权的真实账号登录、目录和最小文本推理。[真实账号证据](evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
 
 ## P1：标准包与离线基础
 
-依赖：P0 的离线架构选择及上述 P1 进入条件。
+依赖 P0 的离线架构选择。
 
 - [x] TypeScript Host ESM 和 DSH Client factory，标准 manifest、Host export 与独立 bundle patch。engine 固定 `0.2.2-rc.1`，使用宿主 peer。
 - [x] 独立 row／provider、双语展示资源、原创 icon 和分发文件清单。设置入口通过公开 bundle 插槽显示当前构建状态。[基座 PR #8](https://github.com/takboo/dsh-plugin-engineering/blob/1393e85ca4c59afcb9cd0fa23caa8a19640d0f27/docs/distribution.md#已安装插件的展示元信息)
@@ -29,19 +27,18 @@
 
 ## P2：OAuth、凭据和模型目录
 
-依赖：P1；P0 账号 gate 通过后才做 live 分支。
+依赖 P1。合成授权用于离线验收，真实账号用例随 P4 执行。
 
 - [x] 实现首次／后续授权、loopback、PKCE、OIDC/JWKS、issued client ID、scope 与身份绑定。离线 Host 使用可注入传输，默认构建不启用真实账号连接。
 - [x] 在实际本地 backing 上使用合成凭据验证跨进程轮转、写入失败和迟到授权，区分本地清理与远端撤销。
 - [x] 实现 `models[]` 目录、visibility、空目录、TTL、账号切换失效和 DSH 目录通知。插件详情页通过 owner-only Typert 操作查看脱敏状态。
 - [x] 同一离线候选包通过实际 Web 和官方 macOS ARM64 Desktop 的安装、插件详情设置和 Host 状态读取。Web 验证旧版本拒绝与卸载，Desktop 验证重启恢复。[双宿主证据](evidence/p2-host-2026-11-11.md)
-- [ ] 真实账号验证、Host 打开系统浏览器和两个宿主的模型选择器仍待实测。Composer 的 plan 状态随推理路由接入后验证。
 
 退出：A1–A6、C1–C3、S1–S4 全通过，秘密 canary 不出 Host／安全 store。
 
 ## P3：Responses 与 DSH 工具闭环
 
-离线工作基于 P2 已验证的授权与目录，真实账号分支仍依赖 P0 账号验证。
+离线工作基于 P2 已验证的授权和目录。真实工具闭环随 P4 验收。
 
 - [x] 通过 DSH LLM route 和合成授权接通单次 Responses 请求、文本流、受限的 namespace function、用量及终态。在重建的 adapter 中回传工具结果和加密推理状态。[首轮离线证据](evidence/p3-offline-2026-11-11.md)
 - [x] 验证完整历史、原生压缩检查点、system 到 developer、字段白名单、namespace 逆映射和动态工具投影。
@@ -53,11 +50,15 @@
 
 ## P4：隔离 profile 与真实账号验收
 
-依赖：P3，另行授权安装和账号使用。
+依赖 P3 和另行授权的安装、账号使用。按[交互验收流程](../test/README.md#p4-交互验收)复跑。
 
-- [ ] 按 L5 与 B1 分别完成本地 Web、官方 Desktop 的主对话、模型切换、重启恢复、辅助路由限制、插件设置入口与共存验收。按实际测试的 Desktop 操作系统和版本声明支持。
-- [ ] 真实会话的文本、工具、停止、重启续接；记录 request ID 与用量可见性，尽量低消耗。
-- [ ] 与原 provider 共存；disable/unload/重启不破坏其他插件；恢复测试前状态。
+- [x] 同一离线包通过 Web 和 Tart Desktop 的隔离安装与交接演练。[环境证据](evidence/p4-interactive-2026-11-11.md)
+- [x] 本地联机候选通过两种宿主的 OAuth 入口开关、系统浏览器启动、取消和 Clash TUN 无凭据预检。[候选证据](evidence/p4-candidate-2026-11-11.md)
+- [x] 本机 Web 候选通过真实登录、目录、复用原注册重新授权、最小文本推理及远端撤销。[实测证据](evidence/p4-real-account-2026-11-11.md#responsemetadata-兼容修复和最小推理通过)
+- [ ] 完成 Desktop 真实账号授权和目录验证（R1）。Tart 的手机扫码曾因来宾蓝牙不可用而阻塞。[历史记录](evidence/p4-real-account-2026-11-11.md#tart-扫码复试和本机-web-验证)
+- [ ] 用同一候选包完成 Web、Desktop 的主对话、模型选择与切换、辅助路由限制、插件设置及 Composer plan 状态验收（L5、U1、B2）。按实际验收的操作系统和版本声明支持。
+- [ ] 完成真实工具审批、执行及工具结果回传（R2），验证停止、令牌刷新、重启续接（R3）。记录安全 request ID 和用量可见性。
+- [ ] 验证与原 provider 共存、禁用、卸载和重启（B1），恢复试验前状态。
 
 退出：U1、R1–R3 及其他 mandatory 用例均 pass，无“跳过当通过”；提供同一产物的身份和脱敏证据。
 
