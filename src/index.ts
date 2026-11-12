@@ -25,8 +25,8 @@ class ChatGptAdapter extends LlmAdapter {
 
   override async listModels(): Promise<LlmModelInfo[]> {
     try {
-      return (await this.accounts.models()).map(model => ({
-        ...model, provider: providerId, inputModalities: ['text'],
+      return (await this.accounts.models()).map(({ id, name }) => ({
+        id, name, provider: providerId, inputModalities: ['text'],
         badge: { text: planLabel, tone: 'success' },
       }))
     } catch {
@@ -38,7 +38,11 @@ class ChatGptAdapter extends LlmAdapter {
   override async resolveModel(provider: string, model: string, signal?: AbortSignal) {
     const models = await this.accounts.models(false, signal).catch(() => [])
     const match = models.find(item => item.id === model)
-    return { ...this.modelInfo(provider, model), name: match?.name ?? model }
+    const contextWindow = match?.contextWindow
+    return {
+      ...this.modelInfo(provider, model), name: match?.name ?? model,
+      ...(contextWindow === undefined ? {} : { context: { contextWindow } }),
+    }
   }
 
   private modelInfo(provider: string, model: string) {

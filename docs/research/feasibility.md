@@ -1,6 +1,6 @@
 # 可行性结论与复用决策
 
-2026-11-11 更新。DSH 公开 Host 接口支持独立 provider 接入。P3 已通过合成推理和隔离宿主验收。本机 Web 和官方 Desktop 已以真实订阅验证模型目录、文本和会话恢复，Desktop 已验证工具审批与回传。[P3 验收](../evidence/p3-acceptance-2026-11-11.md) · [P4 双宿主实测](../evidence/p4-local-native-2026-11-11.md)
+2026-11-12 更新。DSH 公开 Host 接口支持独立 provider 接入。P3 已通过合成推理和隔离宿主验收。本机 Web 和官方 Desktop 已以真实订阅验证模型目录、文本和会话恢复，Desktop 已验证工具审批与回传。[P3 验收](../evidence/p3-acceptance-2026-11-11.md) · [P4 双宿主实测](../evidence/p4-local-native-2026-11-11.md)
 
 ## 分层结论
 
@@ -12,8 +12,15 @@
 | 专用 Adapter | 维持现有设计 | 同宿主插件通过 `onPayload` 在 pi-ai 上补齐请求转换。当前专用路由保留 DSH 的工具和重试边界。实测 SIWC `call_id` 上限为 64 字符，使用固定长度映射可从原 OpenAI 路由续接工具历史。长 SSE 保活后仍须收到真实完成终态。[Responses 对照及离线探针](responses-protocol-comparison.md) · [跨路由实测](../evidence/p4-local-native-2026-11-11.md#跨-provider-回放) |
 | 官方 SDK | Host 固定 `openai@7.55.0` | 官方预览要求 `store:false`、`stream:true`，本地函数可用 namespace 或 `additional_tools` 声明，本项目选择 namespace。合成测试核对固定端点、单次发送和终态，Desktop 实测 namespace 工具结果回传。[官方推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) · [预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) · [本机证据](../evidence/p4-local-native-2026-11-11.md#实机结果) |
 | 本项目准入 | 选定 OSS／本地路径 | 项目采用 MIT。插件免费，用户在本机 Web 或官方 Desktop 自管账号和凭据。[许可证](../../LICENSE) · [SIWC Overview](https://developers.openai.com/siwc/token-sharing-open-source) |
-| 账号／workspace／模型可用 | 已实测一个工作区 | 同一已验证邮箱的两条注册分别可用。在本机双宿主验证 `gpt-6-sol` 和 `gpt-6.1-sol`。默认自动压缩开启时，无容量元数据的模型切换仍受 DSH `0.2.2-rc.1` 限制。[本机证据](../evidence/p4-local-native-2026-11-11.md) · [宿主快照](dsh-contracts.md#主对话与辅助请求) |
+| 账号／workspace／模型可用 | 已实测一个工作区 | 同一已验证邮箱的两条注册分别可用。本机 Web 和官方 Desktop 已在默认压缩配置下从其他路由切入 `gpt-6.1-sol`、`gpt-6-sol` 并继续同一会话。[默认配置复测](../evidence/default-model-switch-2026-11-12.md) · [P4 本机证据](../evidence/p4-local-native-2026-11-11.md) |
 | 发布／多版本支持 | 待验收 | 离线宿主结果限定在固定 DSH 版本。完整宿主支持范围和发布条件见[实施计划](../implementation-plan.md)。[P2 双宿主证据](../evidence/p2-host-2026-11-11.md) |
+
+## 默认压缩配置下的模型切换
+
+- **同类接入。** DSH 的 OpenAI 路由从 pi-ai 模型目录取得容量，adapter 将它返回为 `context.contextWindow`。同样走 ChatGPT 订阅的 `dsh-chatgpt-plan` 优先采用目录中的有效 `context_window`，缺省用 `128000`。这个缺省值是该插件的策略。[DSH pi-ai 配置](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-pi-ai/README.md#configure-provider-routes) · [DSH 模型解析](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-pi-ai/src/adapter.ts#L335-L368) · [订阅插件目录实现](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/adapter.mjs#L23-L36)
+- **离线实测。** 2026-11-12 在 macOS ARM64、Node `26.13.0`、DSH `0.2.2-rc.1`，用提交 `6e2fe8b7319b1edabcf2e5733d3af0cac3796b80` 的临时构建和 [原生 Agent fixture](../../test/p3/native-host.mjs) 复现。从另一条模型路由完成一轮后，保留 `BasicCompaction` 默认配置并切换到 SIWC。基线返回 `MODEL_SWITCH_COMPACTION_FAILED`，SIWC 请求数为零。仅给 `resolveModel()` 增加合成的 `contextWindow: 128000` 后，下一轮完成，恰好发出一次 SIWC 请求，保留旧历史，没有生成摘要或发送 `max_output_tokens`。
+- **目录实测与采用。** 一个真实订阅工作区的可见模型全部返回正整数 `context_window`。`gpt-6.1-sol` 为 500,000，`gpt-6-sol` 为 272,000。adapter 采用目录值。公开目录文档尚未承诺此字段，缺失或无效时保留模型，省略容量。[双宿主复测](../evidence/default-model-switch-2026-11-12.md) · [字段评估](responses-protocol-comparison.md#siwc-模型目录字段) · [官方模型目录](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference#1-list-available-models)
+- **待实测。** 已通过短会话切换和续聊。达到压缩阈值后的摘要仍依赖兼容的摘要路由。[辅助请求契约](dsh-contracts.md#主对话与辅助请求)
 
 ## 选择与取舍
 

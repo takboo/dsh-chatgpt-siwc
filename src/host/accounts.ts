@@ -4,8 +4,9 @@ import { credentialKey, credentialKeyId, credentialKeyScope } from '@deepseek-ai
 import type { CredentialKey, CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import { z } from 'zod'
 import { providerId } from '../identity.js'
-import type { AccountStatus, ModelView, SettingsResult, SettingsView } from '../view.js'
+import type { AccountStatus, SettingsResult, SettingsView } from '../view.js'
 import { fetchCatalog } from './catalog.js'
+import type { CatalogModel } from './catalog.js'
 import { RetryRegistration, SiwcFault, hasPlan, identitySchema, tokenSchema } from './oauth.js'
 import type { OAuth } from './oauth.js'
 
@@ -62,7 +63,7 @@ export class Accounts {
   private readonly lifetime = new AbortController()
   private pending?: { controller: AbortController; id: string; committing: boolean; done: Promise<void> }
   private selectionSignal = new AbortController()
-  private cached?: { id: string; generation: string; until: number; models: ModelView[] }
+  private cached?: { id: string; generation: string; until: number; models: CatalogModel[] }
   private readonly uncertainRefreshes = new Map<string, string>()
   private retryClient?: string
 
@@ -140,7 +141,7 @@ export class Accounts {
       active,
       confirmPlan: active !== null && selection?.confirmed === false,
       models: cache && active === cache.id && cache.generation === activeAccount?.generation
-        && cache.until > (this.api?.now() ?? Date.now()) ? cache.models : null,
+        && cache.until > (this.api?.now() ?? Date.now()) ? cache.models.map(({ id, name }) => ({ id, name })) : null,
     }
   }
 
@@ -321,7 +322,7 @@ export class Accounts {
     }
   }
 
-  async models(force = false, caller?: AbortSignal): Promise<ModelView[]> {
+  async models(force = false, caller?: AbortSignal): Promise<CatalogModel[]> {
     const api = this.api
     if (!api) return []
     const signal = AbortSignal.any([

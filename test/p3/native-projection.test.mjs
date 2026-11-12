@@ -11,6 +11,43 @@ function assistant(text) {
   return { type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text }] }
 }
 
+test('default compaction allows switching an existing session to a SIWC model with catalog capacity', async t => {
+  const { ctx, workspace, replies, requests, state } = await nativeHost(await isolated(t), { signIn: false })
+  const source = { provider: 'fixture-original', model: 'original' }
+  const previousInput = 'Remember the fixture code ALDER-73.'
+  state.models[0].context_window = 128000
+  let handle
+  try {
+    await ctx.get('siwcFixture').accounts.login()
+    await ctx.plugin(TokenMeter)
+    ctx.llm.registerAdapter([source.provider], new class extends LlmAdapter {
+      resolveModel(provider, id) {
+        return { provider, id, name: id, context: { contextWindow: 200000 } }
+      }
+
+      async *stream() {
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: 'I will remember it.' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }())
+    await ctx.plugin(BasicCompaction)
+    handle = await ctx.agents.create({ meta: { cwd: workspace }, agentOptions: source })
+    assertTurnCompleted(await followup(ctx, handle.agent, previousInput), 1)
+    handle.agent.model.select(route)
+    replies.push(() => textResponse('ALDER-73'))
+    const events = await followup(ctx, handle.agent, 'What is the fixture code?')
+    assertTurnCompleted(events, 2)
+    assert.equal(handle.agent.session.requestHeader().config.provider, route.provider)
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0].model, route.model)
+    assert.equal('max_output_tokens' in requests[0], false)
+    assert.ok(requests[0].input.some(item => item.role === 'user' && item.content === previousInput))
+  } finally {
+    await handle?.dispose()
+    await ctx.fiber.dispose()
+  }
+})
+
 test('the native compactor commits a checkpoint and the next SIWC request sends the rewritten history in order', async t => {
   const { ctx, workspace, replies, requests } = await nativeHost(await isolated(t))
   const checkpoint = 'Retained summary of the isolated fixture.'

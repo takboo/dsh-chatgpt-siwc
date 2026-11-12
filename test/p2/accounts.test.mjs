@@ -58,6 +58,25 @@ test('DSH authorization performs verified first login, reauthorization and nativ
   assert.doesNotMatch(JSON.stringify(view), /synthetic-p2-sensitive-canary|fixture@sample|id_token|refresh|Bearer/)
 })
 
+test('exact model resolution uses only positive integer capacity from the active SIWC catalog', async (t) => {
+  const { dependencies, state } = fixture()
+  state.models[0].context_window = 500000
+  state.models[2].context_window = '272000'
+  state.models[2].max_context_window = 872000
+  const { accounts, ctx } = await harness(t, dependencies)
+  await accounts.login()
+
+  const resolve = model => ctx.llm.resolveModelInfo('chatgpt-siwc', model)
+  assert.deepEqual((await resolve('fixture-z')).context, { contextWindow: 500000 })
+  const other = await resolve('fixture-a')
+  assert.equal(other.name, 'Fixture A')
+  assert.equal(other.context, undefined)
+  assert.equal((await resolve('unknown')).context, undefined)
+  assert.deepEqual((await accounts.view()).models, [
+    { id: 'fixture-z', name: 'Fixture Z' }, { id: 'fixture-a', name: 'Fixture A' },
+  ])
+})
+
 test('invalid ID claims, access resource, key source and issued IDs cannot commit credentials', async (t) => {
   for (const [label, setup, code] of [
     ['ID audience', state => { state.idClaims = { aud: 'dynamic_agent_client' } }, 'identity'],

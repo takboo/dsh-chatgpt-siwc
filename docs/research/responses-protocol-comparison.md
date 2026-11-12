@@ -1,14 +1,31 @@
 # Responses 协议转换对照
 
-核对日期 2026-11-11。范围为 HTTP/SSE 请求转换、工具关联、终态、取消、历史回放和模型能力。第三方结果来自固定版本源码及其测试用例的静态查阅。公开 SIWC 的行为依据是 OpenAI 预览文档，实机结果见本项目的[证据索引](../evidence/README.md)。
+协议核对于 2026-11-11，目录字段复核于 2026-11-12。范围为 HTTP/SSE 请求转换、工具关联、终态、取消、历史回放和模型能力。第三方结果来自固定版本源码及其测试用例的静态查阅。公开 SIWC 的行为依据是 OpenAI 预览文档，实机结果见本项目的[证据索引](../evidence/README.md)。
 
-**保留专用 adapter。** 同宿主项目复用 `PiAiAdapter`，并维护独立的 payload 修正和模型目录。修复前的合成探针发现，Pi 的复合工具 ID 会阻断回放，空的 `response.completed` 会被记为成功。P4 已修复这些协议问题。默认模型切换仍受 DSH 容量检查约束。[本地观察](#本地观察) · [P4 采纳与后续](#p4-采纳与后续)
+**保留专用 adapter。** 同宿主项目复用 `PiAiAdapter`，并维护独立的 payload 修正和模型目录。修复前的合成探针发现，Pi 的复合工具 ID 会阻断回放，空的 `response.completed` 会被记为成功。P4 已修复这些协议问题。接入目录容量后，默认配置下的短会话切换已通过双宿主复测。[本地观察](#本地观察) · [双宿主复测](../evidence/default-model-switch-2026-11-12.md)
 
 ## 公开 SIWC 基线
 
 - 公共 HTTP 推理使用 `/v1/responses`，每次发送当前需要的 `input` 数组，设 `store:false` 和 `stream:true`，省略 `previous_response_id`。系统提示使用 `instructions` 或 developer 消息。显式 system item、`max_output_tokens`、`temperature` 和其他列出的参数不受支持。[OpenAI 预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md)
 - 函数和 custom tool 可以放进 namespace，或通过 `additional_tools` input item 提供。Web search 受模型和工作区策略约束。图像和文件取决于模型能力。Responses `tool_search`、图像生成、文件搜索、Code Interpreter、原生 computer use 和 hosted MCP 属于预览限制。[OpenAI 预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md)
 - 收到 `response.completed` 才确认成功。额度错误可能在 HTTP 200 的流内到达。目录使用 `models[]` 的 `visibility: "list"`，保留服务端顺序，显示 `display_name`，请求用 `slug`。[OpenAI 模型和推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference.md)
+
+## SIWC 模型目录字段
+
+2026-11-12，真实订阅目录 10 条、可见 8 条，字段名并集为 54 个。插件采用 `slug`、`display_name`、`visibility` 和 `context_window`。以下是其余 50 个字段的取舍，适用于这个工作区样本。[脱敏证据](../evidence/default-model-switch-2026-11-12.md)
+
+| 未采用字段 | 建议 |
+|---|---|
+| `description`、`priority`、`upgrade`、`availability_nux`、`model_specialty`、`minimal_client_version` | 有模型辨识需求时优先考虑把 `description` 作为有长度上限的纯文本展示。模型顺序继续用目录原顺序，客户端版本、升级和提示交互由 DSH 管理。 |
+| `input_modalities`、`supports_image_detail_original` | 图片接入后再用来约束能力。参考 DSH 的附件投影和同类订阅插件的图片传输测试，先验证用户图片和历史回放，再向模型选择器声明图片支持。[图片用例](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/scripts/image-wire-test.mjs#L49-L96) |
+| `supported_reasoning_levels`、`default_reasoning_level`、`supports_reasoning_effort_updates`、`supports_reasoning_summaries`、`supports_reasoning_summary_parameter`、`default_reasoning_summary`、`support_verbosity`、`default_verbosity` | 若增加思考档位，优先验证 `supported_reasoning_levels` 对应的显式请求值。不同模型列表确实不同。OpenCode 的公开订阅路由关闭中途 effort 更新，默认档、摘要和 verbosity 各自需要实际协议与用例支持。[OpenCode 订阅路由](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/plugin/provider/chatgpt.ts#L21-L60) · [同类订阅插件映射](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/adapter.mjs#L23-L36) |
+| `max_context_window`、`auto_compact_token_limit`、`comp_hash`、`truncation_policy`、`supports_experimental_context` | 采用较小的实际目录 `context_window`。Codex 分别表示默认容量、配置上限和压缩阈值。OpenCode 也为订阅推理单独设预算。把这些字段直接写入 DSH 会改变宿主压缩或历史策略，当前无此需求。[Codex 容量语义](https://github.com/openai/codex/blob/c0cc9fc820f62e4dbdde68214dd6d792d6c8a7ee/codex-rs/protocol/src/openai_models.rs#L444-L462) · [OpenCode 输入预算](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/plugin/provider/openai-context-caps.ts#L9-L49) |
+| `additional_speed_tiers`、`service_tiers`、`default_service_tier`、`prefer_websockets`、`use_responses_lite` | 保留已验收的 HTTP/SSE。速度档会改变请求和订阅消耗，另有需求时再验证。 |
+| `supports_parallel_tool_calls`、`supports_search_tool`、`web_search_tool_type`、`experimental_supported_tools`、`tool_mode`、`apply_patch_tool_type`、`shell_type` | DSH 负责工具的声明、审批和执行。现有 codec 已处理一轮返回多个本地工具。仅在增加具体工具功能且公开 SIWC 支持时采用相关标志。[SIWC 工具限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md) |
+| `base_instructions`、`model_messages`、`include_apps_usage_instructions`、`include_plugin_usage_instructions`、`include_skills_usage_instructions`、`guardian`、`auto_review_model_override`、`requires_sandboxed_review`、`node_repl_auto_review_required`、`node_repl_disabled`、`multi_agent_version`、`multi_agent_reasoning_effort` | 这些字段服务于 Codex 的提示、工具和执行策略。DSH 继续决定提示、审批、沙箱及子代理行为。[Codex 模型与指令类型](https://github.com/openai/codex/blob/c0cc9fc820f62e4dbdde68214dd6d792d6c8a7ee/codex-rs/protocol/src/openai_models.rs#L400-L501) |
+| `available_access_programs`、`available_in_plans`、`supported_in_api`、`allow_only_chatgpt_workspace_executor`、`allow_only_codex_cloud_agent_orchestrator` | 继续使用按账号查询的目录、`visibility` 和实际推理结果。套餐和其他产品的访问标签不适合作为 DSH 自行推断准入的依据。[SIWC 目录用法](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference#1-list-available-models) |
+
+本次目录没有 `max_output_tokens`，SIWC 预览也拒绝在请求中发送它。Amplifier 将已知容量当作规划数据，缺失时省略，不把它变成请求参数。[Amplifier 模型规划](https://github.com/microsoft/amplifier-module-provider-openai-chatgpt/blob/cae3eaa32e16b139b8e889b8cc477c3f2d9dee31/amplifier_module_provider_openai_chatgpt/provider.py#L477-L541) · [SIWC 预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md)
 
 ## 第三方实现事实
 
@@ -73,6 +90,6 @@
 ## P4 采纳与后续
 
 - 已修复跨 provider 工具历史和流结算，DSH 继续负责执行和重试。最终包的跨路由回放、长流和工具闭环已通过本机复测。[协议回归](../../test/p3/responses.test.mjs) · [P4 本机证据](../evidence/p4-local-native-2026-11-11.md)
-- 默认自动压缩支持仍需可核实的 SIWC 容量数据和可用的摘要路由。OpenCode 的输入预算、API 型号上限与当前账号的 SIWC 容量分别核实。[OpenCode 容量策略](https://opencode.ai/docs/providers/#context-limits) · [OpenAI 型号资料](https://developers.openai.com/api/docs/models/gpt-6.1-sol) · [DSH 辅助请求契约](dsh-contracts.md#主对话与辅助请求)
+- 目录容量已用于默认配置下的模型切换。需要生成摘要时，仍按 DSH 辅助请求契约验证可用路由。[双宿主复测](../evidence/default-model-switch-2026-11-12.md) · [DSH 辅助请求契约](dsh-contracts.md#主对话与辅助请求)
 
 有三项设计值得延续。函数声明与名称由本地受控映射生成，只有 `response.completed` 校验通过才把工具交给 DSH。重试由 DSH 按持久化边界调度。出站历史来自 DSH 已提交的上下文。Amplifier 的 `additional_tools` 适合做独立协议 fixture。Pi 的历史 ID 转换和 OpenCode 的分阶段超时适合借鉴到具体改动。Magpie 针对多客户端实现的 phase 推断、内存续接缓存与补写工具结果有不同的适用前提。 [OpenAI 预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md) · [本项目流与重放设计](../architecture.md#5-流终态replay-与重试)

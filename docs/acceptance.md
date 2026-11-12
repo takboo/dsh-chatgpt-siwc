@@ -12,7 +12,7 @@
 | A4 | 两进程同时发现过期，真实 backing 下刷新 | 仅一次有效轮转；第二进程重读新记录；无丢写；网络／落盘异常不分发未提交 token |
 | A5 | refresh 与 logout、切账号、卸载竞争 | 退出后无 grant 复活、旧账号请求和目录失效；异步提交校验 generation |
 | A6 | 拒绝登录、超时、取消、重复 begin、端口占用 | 状态准确、资源释放、无隐藏重试；下一次合法登录可正常开始 |
-| C1 | 官方 models[] fixture 与未知字段 | slug/display_name/visibility 正确映射；只显示 list、保留服务器排序；不错误依赖 data[]；不伪造模型 ID／context |
+| C1 | 官方 models[] fixture 与未知字段 | 正确映射 slug/display_name/visibility，只显示 list 并保留服务器排序。仅向宿主提供有效的 context_window，缺失或无效时保留模型并省略容量 |
 | C2 | 空目录、hidden／不可用模型、401/403/429、过期缓存 | 行为按官方 visibility 语义；无跨账号缓存；区分 auth、准入、quota、rate limit |
 | C3 | 登录／登出／账号切换更新目录 | GUI 重载完整 listModels；logged-out 无可用模型；无 token 返回 Client |
 | W1 | 最终 HTTP 请求捕获（可用替身传输） | public origin、正确路径与 Bearer 授权，使用 DSH `attributionHeaders()`；OAuth app/host 参数另由 A1 核对；store:false、stream:true，SDK 自动 retry 关闭 |
@@ -38,7 +38,7 @@
 
 | ID | 场景 | 可观察通过条件 |
 |---|---|---|
-| L5 | 本地 Web 与官方 Desktop 各自在隔离 profile 安装并运行 | 模型可选可提交，模型切换与重启恢复可观察。记录有无 context 时的行为，以及 title 和 compaction 的停用或显式路由。报告真实安装载体、版本与限制 |
+| L5 | 本地 Web 与官方 Desktop 各自在隔离 profile 安装并运行 | 模型可选可提交，模型切换与重启恢复可观察。记录有无 context 时的行为，注明标题和手动、自动压缩使用的配置。报告实际载体、版本与限制 |
 | B1 | 与原 OpenAI/DeepSeek provider 共存、重名、禁用／卸载 | 无 registry 覆写；冲突清楚；其他 provider 前后均可用；重启生效状态准确 |
 | U1 | 两个宿主的插件详情设置、官方 UX 与多个保存注册 | 插件管理页的对应详情可进入设置。Continue with ChatGPT、首次 plan 确认、Using ChatGPT plan、Manage usage 和限额指引可观察。同 email 的不同 client 保持独立。新注册通过验证且有推理权限后才能成为活动注册 |
 | B2 | 实际 packed bundle 与语言资源 | 相同包摘要贯穿 pack/install；入口/patch/locales/icon 齐全；中文／英文无模板 fallback |
