@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto'
 import { attributionHeaders, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, ProviderRequestId, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import OpenAI from 'openai'
@@ -77,9 +78,13 @@ export async function* responses(
   let upstream: Response | undefined
   try {
     const token = await grant.access(signal)
+    const headers = attributionHeaders()
+    if (options.sessionId !== undefined) {
+      headers['session-id'] = createHmac('sha256', grant.registration).update(options.sessionId).digest('hex')
+    }
     const sdk = new OpenAI({
       apiKey: token, baseURL: resource, maxRetries: 0, organization: null, project: null, logLevel: 'off',
-      defaultHeaders: attributionHeaders(), fetchOptions: { redirect: 'error' },
+      defaultHeaders: headers, fetchOptions: { redirect: 'error' },
       fetch: async (input, init) => {
         const url = typeof input === 'string' || input instanceof URL ? String(input) : input.url
         if (url !== endpoint || init?.method !== 'POST') {

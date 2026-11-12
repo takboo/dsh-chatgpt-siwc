@@ -11,6 +11,7 @@
 | P4 | [本机双宿主验收与问题处置](p4-local-native-2026-11-11.md) · [早期真实账号与最小推理](p4-real-account-2026-11-11.md) · [联机候选与出网](p4-candidate-2026-11-11.md) · [Tart 交互环境](p4-interactive-2026-11-11.md) |
 | L5 复测 | [默认压缩配置下的双宿主模型切换](default-model-switch-2026-11-12.md) |
 | W2 复测 | [SIWC 推理档位探针与 Desktop 原生选档](siwc-reasoning-desktop-2026-11-12.md) |
+| W6 复测 | [SIWC 提示缓存 Desktop 对照](siwc-prompt-cache-desktop-2026-11-12.md) |
 
 ## 记录模板
 

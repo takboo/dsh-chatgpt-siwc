@@ -68,6 +68,7 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - MVP 仅 text＋本地函数工具；向宿主声明准确的 text-only 能力，遵守宿主已有图片 placeholder／文件 handle 投影，不承诺图像理解，也不在 codec 再隐藏丢弃内容。若收到超出声明的原始内容则发送前拒绝。后续按 DSH attachment interface 接入，不能直读任意本机路径替代。
 - 模型解析向 DSH 提供目录返回的 `context_window`，供宿主规划压缩与切换。缺失或无效时省略容量。标题和压缩摘要请求仍受辅助路由契约约束。[目录字段与取舍](research/responses-protocol-comparison.md#siwc-模型目录字段) · [辅助请求契约](research/dsh-contracts.md#主对话与辅助请求)
 - `gpt-6.1-sol` 的原生推理选择器只显示已实测且由当前账号目录声明的档位。显式档位作为每次请求顶层的 `reasoning.effort` 发送。同一会话切换档位时保留完整历史。「提供方默认」省略 `reasoning`。[五档协议实测](evidence/siwc-reasoning-desktop-2026-11-12.md)
+- 有 DSH `sessionId` 的主请求使用当前注册的指纹派生稳定的 `session-id` HTTP 头。相同注册和会话在令牌刷新后沿用同一头值。不同注册或会话分别派生，独立调用省略此头。缓存配置留在服务端。[请求回归](../test/p3/responses.test.mjs) · [Desktop 缓存记录](evidence/siwc-prompt-cache-desktop-2026-11-12.md)
 
 ## 5. 流终态、replay 与重试
 

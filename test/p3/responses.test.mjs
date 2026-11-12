@@ -30,6 +30,41 @@ async function inference(t) {
   return { ...result, dependencies, state, captured, reply(handler) { reply = handler } }
 }
 
+test('session-id is stable across refresh and isolated by account and DSH session', async t => {
+  const { ctx, accounts, captured, reply, state } = await inference(t)
+  const original = (await accounts.view()).active
+  const inSession = { ...options, sessionId: 'fixture-session-a' }
+  reply(() => sse(complete([message('Fixture answer.')])))
+
+  const prepared = await ctx.llm.prepareCall(route)
+  await Array.fromAsync(prepared.stream(inSession))
+  state.time += 300_000
+  await Array.fromAsync(ctx.llm.stream(inSession))
+  await Array.fromAsync(ctx.llm.stream({ ...options, sessionId: 'fixture-session-b' }))
+  await Array.fromAsync(ctx.llm.stream(options))
+
+  state.account = 'fixture-other-account'
+  state.clientId = 'oaiapp_other_registration'
+  await accounts.login()
+  await Array.fromAsync(ctx.llm.stream(inSession))
+  await accounts.activate(original)
+  await Array.fromAsync(ctx.llm.stream(inSession))
+
+  assert.equal(captured.length, 6)
+  const headers = captured.map(({ request }) => request.headers)
+  const [first, refreshed, otherSession, sessionless, otherAccount, reselected] = headers.map(header => header.get('session-id'))
+  for (const value of [first, otherSession, otherAccount]) assert.match(value, /^[0-9a-f]{64}$/)
+  assert.equal(new Set([first, otherSession, otherAccount]).size, 3)
+  assert.notEqual(headers[0].get('authorization'), headers[1].get('authorization'))
+  assert.equal(refreshed, first)
+  assert.equal(reselected, first)
+  assert.equal(sessionless, null)
+  for (const { body } of captured) {
+    assert.deepEqual(body, { model: route.model, input: [{ role: 'user', content: 'Start.' }],
+      store: false, stream: true, include: ['reasoning.encrypted_content'] })
+  }
+})
+
 test('the prepared DSH route sends one restricted request and replays a namespaced tool exchange', async t => {
   const { ctx, captured, reply, dependencies, path, plugin, state } = await inference(t)
   const longName = 'fixture/tools/' + 'lookup-'.repeat(12)

@@ -15,7 +15,7 @@
 | C1 | 官方 models[] fixture 与未知字段 | 正确映射 slug/display_name/visibility，只显示 list 并保留服务器排序。仅向宿主提供有效的 context_window，缺失或无效时保留模型并省略容量 |
 | C2 | 空目录、hidden／不可用模型、401/403/429、过期缓存 | 行为按官方 visibility 语义；无跨账号缓存；区分 auth、准入、quota、rate limit |
 | C3 | 登录／登出／账号切换更新目录 | GUI 重载完整 listModels；logged-out 无可用模型；无 token 返回 Client |
-| W1 | 最终 HTTP 请求捕获（可用替身传输） | public origin、正确路径与 Bearer 授权，使用 DSH `attributionHeaders()`；OAuth app/host 参数另由 A1 核对；store:false、stream:true，SDK 自动 retry 关闭 |
+| W1 | 最终 HTTP 请求捕获（可用替身传输） | public origin、正确路径与 Bearer 授权，使用 DSH `attributionHeaders()`；OAuth app/host 参数另由 A1 核对；store:false、stream:true，SDK 自动 retry 关闭。验证 `session-id` 在同一注册和会话中稳定、跨注册或会话隔离，独立请求省略此头，请求体无缓存参数 |
 | W2 | 推理档位与不支持的请求控制 | 显式推理档位须同时在模型的实测和目录声明范围内，映射到顶层 `reasoning.effort`。提供方默认省略该字段。同会话切档保留历史。温度、maxTokens、stop 等不支持控制在出网前拒绝 |
 | W3 | 多轮／压缩 history、developer 更新、工具结果 | 发送当前完整上下文且顺序语义正确；无 previous_response_id、system input、隐藏额外提示或丢历史 |
 | W4 | 缺失媒体类型、EOF、failed、incomplete、malformed、空完成、HTTP 200 后中断 | 缺失 `Content-Type` 时按 SSE 验证。有效 `response.completed` 必须有内容块。空完成报告 `EMPTY_RESPONSE`，未完成 reasoning 保留失败终态和用量。每个 attempt 一个终态，部分工具不进入执行队列 |
