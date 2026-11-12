@@ -105,6 +105,7 @@ test('hot removal cancels the active SSE and catalog and does not hand an old pr
     const remaining = Array.fromAsync(stream)
 
     const catalog = pendingRequest()
+    state.time += 61_000
     state.modelResponse = catalog.wait
     const models = ctx.llm.listModels(route.provider)
     const catalogSignal = await catalog.entered

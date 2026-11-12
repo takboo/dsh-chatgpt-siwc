@@ -12,13 +12,13 @@
 
 ## SIWC 模型目录字段
 
-2026-11-12，真实订阅目录 10 条、可见 8 条，字段名并集为 54 个。插件采用 `slug`、`display_name`、`visibility` 和 `context_window`。推理档位接入后，还读取 `gpt-6.1-sol` 的 `supported_reasoning_levels`。下表记录其余字段的取舍，适用于这个工作区样本。[目录证据](../evidence/default-model-switch-2026-11-12.md) · [档位复测](../evidence/siwc-reasoning-desktop-2026-11-12.md)
+2026-11-12，真实订阅目录 10 条、可见 8 条，字段名并集为 54 个。插件采用 `slug`、`display_name`、`visibility`、`context_window` 和 `supported_reasoning_levels`。下表记录其余字段的取舍，适用于这个工作区样本。[目录证据](../evidence/default-model-switch-2026-11-12.md) · [档位复测](../evidence/siwc-reasoning-desktop-2026-11-12.md)
 
 | 未采用字段 | 建议 |
 |---|---|
 | `description`、`priority`、`upgrade`、`availability_nux`、`model_specialty`、`minimal_client_version` | 有模型辨识需求时优先考虑把 `description` 作为有长度上限的纯文本展示。模型顺序继续用目录原顺序，客户端版本、升级和提示交互由 DSH 管理。 |
 | `input_modalities`、`supports_image_detail_original` | 图片接入后再用来约束能力。参考 DSH 的附件投影和同类订阅插件的图片传输测试，先验证用户图片和历史回放，再向模型选择器声明图片支持。[图片用例](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/scripts/image-wire-test.mjs#L49-L96) |
-| `default_reasoning_level`、`supports_reasoning_effort_updates`、`supports_reasoning_summaries`、`supports_reasoning_summary_parameter`、`default_reasoning_summary`、`support_verbosity`、`default_verbosity` | 提供方默认档省略 `reasoning`，由 SIWC 决定实际档位。用户改档从下一次请求起生效，走顶层 `reasoning.effort`。OpenCode 的公开订阅路由也关闭中途 effort 更新。摘要和 verbosity 各自需要协议证据和用例支持。[OpenCode 订阅路由](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/plugin/provider/chatgpt.ts#L21-L60) · [同类订阅插件映射](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/adapter.mjs#L23-L36) |
+| `default_reasoning_level`、`supports_reasoning_effort_updates`、`supports_reasoning_summaries`、`supports_reasoning_summary_parameter`、`default_reasoning_summary`、`support_verbosity`、`default_verbosity` | 锁定版 DSH 会把 `defaultEffort` 填入未选档的调用。继续省略它以保留提供方默认。显式改档走下一次请求的顶层 `reasoning.effort`。OpenCode 的公开订阅路由也关闭中途 effort 更新。摘要和 verbosity 各自需要协议证据和用例支持。[DSH 默认档语义](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm/src/index.ts#L919-L944) · [OpenCode 订阅路由](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/plugin/provider/chatgpt.ts#L21-L60) |
 | `max_context_window`、`auto_compact_token_limit`、`comp_hash`、`truncation_policy`、`supports_experimental_context` | 采用较小的实际目录 `context_window`。Codex 分别表示默认容量、配置上限和压缩阈值。OpenCode 也为订阅推理单独设预算。把这些字段直接写入 DSH 会改变宿主压缩或历史策略，当前无此需求。[Codex 容量语义](https://github.com/openai/codex/blob/c0cc9fc820f62e4dbdde68214dd6d792d6c8a7ee/codex-rs/protocol/src/openai_models.rs#L444-L462) · [OpenCode 输入预算](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/plugin/provider/openai-context-caps.ts#L9-L49) |
 | `additional_speed_tiers`、`service_tiers`、`default_service_tier`、`prefer_websockets`、`use_responses_lite` | 保留已验收的 HTTP/SSE。速度档会改变请求和订阅消耗，另有需求时再验证。 |
 | `supports_parallel_tool_calls`、`supports_search_tool`、`web_search_tool_type`、`experimental_supported_tools`、`tool_mode`、`apply_patch_tool_type`、`shell_type` | DSH 负责工具的声明、审批和执行。现有 codec 已处理一轮返回多个本地工具。仅在增加具体工具功能且公开 SIWC 支持时采用相关标志。[SIWC 工具限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md) |
@@ -26,6 +26,19 @@
 | `available_access_programs`、`available_in_plans`、`supported_in_api`、`allow_only_chatgpt_workspace_executor`、`allow_only_codex_cloud_agent_orchestrator` | 继续使用按账号查询的目录、`visibility` 和实际推理结果。套餐和其他产品的访问标签不适合作为 DSH 自行推断准入的依据。[SIWC 目录用法](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference#1-list-available-models) |
 
 本次目录没有 `max_output_tokens`，SIWC 预览也拒绝在请求中发送它。Amplifier 将已知容量当作规划数据，缺失时省略，不把它变成请求参数。[Amplifier 模型规划](https://github.com/microsoft/amplifier-module-provider-openai-chatgpt/blob/cae3eaa32e16b139b8e889b8cc477c3f2d9dee31/amplifier_module_provider_openai_chatgpt/provider.py#L477-L541) · [SIWC 预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md)
+
+### 目录字段复核
+
+2026-11-12，用已脱敏的账号目录样本、固定 DSH `0.2.2-rc.1` 和开源源码复核。
+
+- **推理档位的模型覆盖。** 样本中八个可见模型均列出 `low`、`medium`、`high`、`xhigh`、`max`。这五个已知请求值和所选模型目录的交集决定原生选项。已在 `gpt-6.1-terra` 追加实机验证。同宿主的 `ckanner/dsh-plugin-chatgpt` 记录了 `gpt-6-astra` 和 `gpt-6.1-terra` 目录列出 `ultra`、实际请求返回 `400 invalid_value` 的第三方实测。Codex 自身也将 `Ultra` 解析为其他实际请求档位。[Terra Desktop 实测](../evidence/siwc-reasoning-desktop-2026-11-12.md#逐模型目录档位与-terra-续聊) · [同宿主档位实测](https://github.com/ckanner/dsh-plugin-chatgpt/blob/2138cb9cba1598b3617826f04ac1ebdf8974bc99/src/models/served.ts#L38-L53) · [实测说明](https://github.com/ckanner/dsh-plugin-chatgpt/blob/2138cb9cba1598b3617826f04ac1ebdf8974bc99/src/models/served.ts#L71-L79) · [Codex 档位解析](https://github.com/openai/codex/blob/56a8470aa0b0c5b9f174f449a697fe6ccc6d9462/codex-rs/protocol/src/openai_models/reasoning_effort.rs#L10-L35)
+
+### DSH 档位与请求值
+
+- DSH 原生接口由 adapter 报告模型的 `reasoning.efforts`。每个档位有稳定 ID 和显示名，宿主在执行前验证请求 ID。用户可以通过原生选择器选择会话档位，也可以用 `agent-default-model.reasoningEffort` 指定新会话的默认选择。插件继续省略模型元数据里的 `defaultEffort`，以保留 SIWC 的提供方默认。[DSH 原生档位类型](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm/src/types.ts#L413-L431) · [DSH 默认模型设置](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/core/agent-default-model/src/index.ts#L23-L41)
+- DSH 内置 pi-ai 支持可选的逐模型 `reasoningEfforts`，将原生档位 ID 映射到自定义网关的请求值。该配置由 pi-ai adapter 解析成 `thinkingLevelMap`。同宿主 `dsh-chatgpt-plan` 根据每个 SIWC 模型的目录自动生成同名映射。同宿主 `ckanner/dsh-plugin-chatgpt` 优先将已知模型的目录档位与其内置已知值核对。OpenCode 也提供目录默认档位和可选的用户自定义 `variants`。[DSH pi-ai 配置](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-pi-ai/README.md#run-with-reasoning-and-wire-compatibility) · [同名映射](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/adapter.mjs#L26-L37) · [同宿主目录校验](https://github.com/ckanner/dsh-plugin-chatgpt/blob/2138cb9cba1598b3617826f04ac1ebdf8974bc99/src/models/describe.ts#L137-L171) · [OpenCode variants](https://opencode.ai/docs/models/#variants)
+
+adapter 沿用原生档位 ID 和选择器，按每个模型的 SIWC 目录与已知请求值取交集，选择器和出站校验共用该结果。新模型声明已有档位时随目录刷新自动呈现。用户自行映射留到有改名或兼容性需求时，再考虑采用与 DSH pi-ai 一致的可选覆盖语义。
 
 ## 第三方实现事实
 

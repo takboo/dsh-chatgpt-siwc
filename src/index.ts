@@ -1,13 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-authorization'
 import { credentialKeyScope } from '@deepseek-ai/dsh-credentials'
-import { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, LlmError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { planLabel, providerId } from './identity.js'
 import { Accounts } from './host/accounts.js'
-import { testedReasoningModel } from './host/catalog.js'
 import type { CatalogModel } from './host/catalog.js'
-import { OAuth } from './host/oauth.js'
+import { OAuth, SiwcFault } from './host/oauth.js'
 import type { OAuthDependencies } from './host/oauth.js'
 import { responses } from './host/responses.js'
 import { Settings } from './host/settings.js'
@@ -64,9 +63,16 @@ class ChatGptAdapter extends LlmAdapter {
   override async prepareCall(provider: string, model: string, signal?: AbortSignal) {
     const grant = await this.accounts.prepareInference(signal)
     let match: CatalogModel | undefined
-    if (grant && model === testedReasoningModel) {
-      match = await this.catalogModel(model, grant.signal)
-      await grant.assertCurrent()
+    if (grant) {
+      try {
+        match = await this.catalogModel(model, grant.signal)
+        await grant.assertCurrent()
+      } catch (error) {
+        if (grant.signal.aborted || (error instanceof SiwcFault && (error.code === 'stale' || error.code === 'cancelled'))) {
+          throw new LlmError('The ChatGPT request was cancelled.', 'ABORTED')
+        }
+        throw error
+      }
     }
     return {
       model: this.modelInfo(provider, model, match),

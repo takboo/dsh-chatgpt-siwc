@@ -3,10 +3,9 @@ import { z } from 'zod'
 import type { ModelView } from '../view.js'
 import { OAuth, SiwcFault, readJson, resource } from './oauth.js'
 
-// These explicit levels completed with a real SIWC subscription on this model.
-export const testedReasoningModel = 'gpt-6.1-sol'
-const testedEfforts = ['low', 'medium', 'high', 'xhigh', 'max'] as const
-export type SiwcReasoningEffort = typeof testedEfforts[number]
+// Known SIWC request values, offered only when the model also advertises them.
+const knownReasoningEfforts = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+export type SiwcReasoningEffort = typeof knownReasoningEfforts[number]
 
 export interface CatalogModel extends ModelView {
   contextWindow?: number
@@ -44,7 +43,7 @@ export async function fetchCatalog(api: OAuth, token: string, signal: AbortSigna
     if (model.success && !models.has(model.data.slug)) {
       const { slug, display_name: name, context_window: contextWindow, supported_reasoning_levels: levels } = model.data
       const advertised = new Set(levels?.map(level => level?.effort))
-      const reasoningEfforts = slug === testedReasoningModel ? testedEfforts.filter(effort => advertised.has(effort)) : []
+      const reasoningEfforts = knownReasoningEfforts.filter(effort => advertised.has(effort))
       models.set(slug, {
         id: slug, name, ...(contextWindow === undefined ? {} : { contextWindow }),
         ...(reasoningEfforts.length === 0 ? {} : { reasoningEfforts }),

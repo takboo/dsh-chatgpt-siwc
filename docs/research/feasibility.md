@@ -24,7 +24,7 @@
 
 ## 推理档位
 
-在隔离 Desktop Host 内直连公开 SIWC，`gpt-6.1-sol` 的 `low`、`medium`、`high`、`xhigh`、`max` 均完成，服务端回显与请求一致。adapter 只为这个模型声明账号目录也列出的实测档位。DSH 原生选择器显示五档和 `Default`。选默认时，adapter 省略请求的 `reasoning`，由 SIWC 决定档位。候选包在 Desktop 的同一持久会话里从 `high` 切到 `max` 后正确续聊。结果覆盖实测模型、订阅工作区和 Desktop 版本。[Desktop 实测](../evidence/siwc-reasoning-desktop-2026-11-12.md)
+在隔离 Desktop Host 内直连公开 SIWC，`gpt-6.1-sol` 的 `low`、`medium`、`high`、`xhigh`、`max` 均完成，服务端回显与请求一致。adapter 按每个模型的账号目录与这五个已知请求值取交集，公布给 DSH 原生选择器。提供方默认省略请求的 `reasoning`。逐模型候选包在原隔离 Desktop 的 `gpt-6.1-terra` 上通过五档及提供方默认的六轮续聊，包括同会话从 `high` 切到 `max`。当前工作区的 8 个可见模型均有选项。[Desktop 实测](../evidence/siwc-reasoning-desktop-2026-11-12.md)
 
 ## 提示缓存
 

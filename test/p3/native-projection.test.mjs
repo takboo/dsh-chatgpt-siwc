@@ -16,7 +16,7 @@ test('native reasoning choices send the selected effort and keep same-session hi
   const tested = { provider: route.provider, model: 'gpt-6.1-sol' }
   const levels = ['low', 'medium', 'high', 'xhigh', 'max']
   const entries = [...levels, 'ultra', 'high'].map(effort => ({ effort }))
-  state.models[0].supported_reasoning_levels = entries
+  state.models[0].supported_reasoning_levels = [{ effort: 'ultra' }]
   state.models.push({
     slug: tested.model, display_name: 'GPT-6.1 Sol', visibility: 'list',
     supported_reasoning_levels: [null, ...entries], default_reasoning_level: 'medium',
@@ -49,6 +49,48 @@ test('native reasoning choices send the selected effort and keep same-session hi
     assert.equal(requests[1].input.some(item => item.type === 'configuration_update'), false)
   } finally {
     await handle?.dispose()
+    await ctx.fiber.dispose()
+  }
+})
+
+test('native reasoning choices follow each model and newly listed models after catalog refresh', async t => {
+  const { ctx, replies, requests, state } = await nativeHost(await isolated(t))
+  const other = { ...route, model: 'fixture-a' }
+  const added = { ...route, model: 'fixture-new-model' }
+  const levels = (...efforts) => efforts.map(effort => ({ effort }))
+  state.models[0].supported_reasoning_levels = levels('high', 'ultra', 'low', 'high')
+  state.models.find(model => model.slug === other.model).supported_reasoning_levels = levels('xhigh', 'medium')
+  const modelIds = async () => (await ctx.llm.listModels(route.provider)).map(model => model.id)
+  const reasoningIds = async ({ provider, model }) =>
+    (await ctx.llm.resolveModelInfo(provider, model)).reasoning?.efforts.map(effort => effort.id)
+  const select = (model, effort) => ({ ...model, reasoningEffort: ReasoningEffortId(effort) })
+  const messages = [{ role: 'user', content: [{ type: 'text', text: 'Check the selected effort.' }] }]
+  try {
+    assert.deepEqual(await modelIds(), [route.model, other.model])
+    assert.deepEqual(await reasoningIds(route), ['low', 'high'])
+    assert.deepEqual(await reasoningIds(other), ['medium', 'xhigh'])
+    await assert.rejects(ctx.llm.prepareCall(select(other, 'high')), error => error.failure?.code === 'UNSUPPORTED_REASONING_EFFORT')
+    assert.equal(requests.length, 0)
+
+    state.models.push({
+      slug: added.model, display_name: 'Newly Listed Model', visibility: 'list',
+      supported_reasoning_levels: levels('ultra', 'max'), default_reasoning_level: 'max',
+    })
+    assert.deepEqual(await modelIds(), [route.model, other.model])
+    state.time += 61_000
+    assert.deepEqual(await modelIds(), [route.model, other.model, added.model])
+    assert.deepEqual(await reasoningIds(added), ['max'])
+
+    replies.push(() => textResponse(), () => textResponse(), () => textResponse(), () => textResponse())
+    for (const selection of [select(route, 'low'), select(other, 'xhigh'), select(added, 'max'), added]) {
+      const chunks = await Array.fromAsync(ctx.llm.stream({ ...selection, messages }))
+      assert.deepEqual(chunks.at(-1).reason, { kind: 'stop' })
+    }
+    assert.deepEqual(requests.map(({ model, reasoning }) => [model, reasoning?.effort]), [
+      [route.model, 'low'], [other.model, 'xhigh'], [added.model, 'max'], [added.model, undefined],
+    ])
+    assert.equal(requests[3].reasoning, undefined)
+  } finally {
     await ctx.fiber.dispose()
   }
 })
