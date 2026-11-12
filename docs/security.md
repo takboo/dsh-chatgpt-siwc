@@ -8,6 +8,7 @@ P2 用合成授权和实际本地 backing 验证了竞态与隔离。P4 在本�
 - 本地 credential store 使用文件权限与跨进程写锁，**不是 OS keychain／加密保险箱**。同用户进程、具有相应文件权限的 Agent 工具以及恶意同进程 Host 插件仍可能读取。不能宣传“模型工具绝不可能访问 token”。
 - 防泄漏主要减少意外暴露；若要求抵御同用户恶意工具，需另外设计权限隔离或外部凭据代理，不在 MVP 声称满足。
 - OpenAI 接收实际推理输入；`store:false` 不等于所有日志、风控或保留义务消失，不作零留存承诺。
+- 用户图片由 DSH 附件服务保管。SIWC 请求只读取宿主提供的附件引用。Base64 图片数据进入推理请求体，会话保留附件引用，错误消息省略附件路径和原始读取异常。
 
 ## 威胁与要求
 
@@ -44,7 +45,7 @@ P2 用合成授权和实际本地 backing 验证了竞态与隔离。P4 在本�
 
 - 为减少重复动态注册，同一宿主上的复测沿用专用隔离 `DSH_HOME` 和 profile。更新候选包或重启时保留本地注册映射及稳定的 `ext_agent_host_id`。
 - 同一 ChatGPT 账号和工作区已有注册时，在原账号行选择「重新登录」（`Sign in again`），复用已签发的 `client_id`。重新授权失败时先排查原注册的错误。仅在没有可复用的注册或用例明确覆盖首次注册时，才使用 `dynamic_agent_client`。[OpenAI 授权流程](https://developers.openai.com/siwc/token-sharing-open-source/sign-in#2-start-authorization)
-- 每轮结束按上文退出、尝试远端撤销并清除本地 access、refresh 和 ID token。后续复测所需的注册映射和宿主 ID 保留在本机受限试验目录。取证时只报告标识是否复用及撤销结果，遵循[证据规则](evidence/README.md)。[OpenAI 账号与会话](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions#end-the-renewable-session)
+- 每轮结束默认退出、尝试远端撤销并清除本地 access、refresh 和 ID token。用户明确要求为后续复测保留登录时，将授权留在原专用隔离 profile。注册映射和宿主 ID 保留在本机受限试验目录。取证时只报告标识是否复用及退出或保留的结果，遵循[证据规则](evidence/README.md)。[OpenAI 账号与会话](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions#end-the-renewable-session)
 
 ## 留存与诊断
 

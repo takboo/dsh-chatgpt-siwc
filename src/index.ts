@@ -16,7 +16,11 @@ export const name = providerId
 export const inject = ['llm', 'authorization', 'credentials']
 
 class ChatGptAdapter extends LlmAdapter {
-  constructor(private readonly accounts: Accounts, private readonly fetch?: typeof globalThis.fetch) {
+  constructor(
+    private readonly accounts: Accounts,
+    private readonly attachments: () => Context['attachments'] | undefined,
+    private readonly fetch?: typeof globalThis.fetch,
+  ) {
     super()
   }
 
@@ -26,8 +30,10 @@ class ChatGptAdapter extends LlmAdapter {
 
   override async listModels(): Promise<LlmModelInfo[]> {
     try {
-      return (await this.accounts.models()).map(({ id, name }) => ({
-        id, name, provider: providerId, inputModalities: ['text'],
+      const models = await this.accounts.models()
+      const hasAttachments = this.attachments() !== undefined
+      return models.map(({ id, name, supportsImages }) => ({
+        id, name, provider: providerId, inputModalities: supportsImages && hasAttachments ? ['text', 'image'] : ['text'],
         badge: { text: planLabel, tone: 'success' },
       }))
     } catch {
@@ -37,7 +43,8 @@ class ChatGptAdapter extends LlmAdapter {
   }
 
   override async resolveModel(provider: string, model: string, signal?: AbortSignal) {
-    return this.modelInfo(provider, model, await this.catalogModel(model, signal))
+    const match = await this.catalogModel(model, signal)
+    return this.modelInfo(provider, model, match, match?.supportsImages === true && this.attachments() !== undefined)
   }
 
   private async catalogModel(model: string, signal?: AbortSignal) {
@@ -46,14 +53,15 @@ class ChatGptAdapter extends LlmAdapter {
     return models.find(item => item.id === model)
   }
 
-  private modelInfo(provider: string, model: string, match?: CatalogModel) {
+  private modelInfo(provider: string, model: string, match: CatalogModel | undefined, supportsImages: boolean) {
     const contextWindow = match?.contextWindow
     const efforts = match?.reasoningEfforts?.map(effort => ({
       id: ReasoningEffortId(effort),
       name: effort === 'xhigh' ? 'Extra High' : effort.charAt(0).toUpperCase() + effort.slice(1),
     }))
     return {
-      provider, id: model, name: match?.name ?? model, inputModalities: ['text'] as const,
+      provider, id: model, name: match?.name ?? model,
+      inputModalities: supportsImages ? ['text', 'image'] as const : ['text'] as const,
       systemPromptUpdate: 'in-history' as const,
       ...(contextWindow === undefined ? {} : { context: { contextWindow } }),
       ...(efforts === undefined ? {} : { reasoning: { efforts } }),
@@ -74,9 +82,11 @@ class ChatGptAdapter extends LlmAdapter {
         throw error
       }
     }
+    const attachments = match?.supportsImages === true ? this.attachments() : undefined
     return {
-      model: this.modelInfo(provider, model, match),
-      stream: (options: GenerateOptions) => responses(options, grant, this.fetch, match?.reasoningEfforts ?? []),
+      model: this.modelInfo(provider, model, match, attachments !== undefined),
+      stream: (options: GenerateOptions) => responses(options, grant, this.fetch, match?.reasoningEfforts ?? [],
+        attachments && ((ref, signal) => attachments.readImageRequest(ref, this.imageRequestTarget(provider, model, ref), signal))),
     }
   }
 
@@ -99,7 +109,7 @@ export function attachAccounts(ctx: Context, dependencies?: OAuthDependencies): 
   const notify = () => ctx.emit('llm/models-updated', providerId)
   const accounts = new Accounts(ctx.credentials, ctx.authorization, profile, notify,
     dependencies && new OAuth(dependencies))
-  ctx.llm.registerAdapter([providerId], new ChatGptAdapter(accounts, dependencies?.fetch))
+  ctx.llm.registerAdapter([providerId], new ChatGptAdapter(accounts, () => ctx.get('attachments'), dependencies?.fetch))
   ctx.effect(() => () => accounts.dispose())
   ctx.on('credentials/record-updated', key => {
     if (key === accounts.selectionKey) accounts.invalidate()

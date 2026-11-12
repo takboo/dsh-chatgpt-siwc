@@ -36,6 +36,10 @@
 - 原隔离 Desktop 的公开 SIWC 对照固定 `gpt-6.1-sol`、`low` 和相同的 3,776 token 请求。仅改变连字符 `session-id` 头，固定组命中 4/6，省略组命中 1/6，逐次换值组命中 0/6。每次命中读取 3,584 个 token，所有请求报告的缓存写入均为 0。[Desktop 请求头对照](../evidence/siwc-prompt-cache-desktop-2026-11-12.md#session-id-请求头对照)
 - adapter 采用现有授权注册指纹与 DSH `GenerateOptions.sessionId` 派生稳定请求头。原生 Desktop 以候选包完成 6 轮正常对话，5 轮续聊有 4 轮命中，会话总输入的 65.6% 由缓存读取。该数字适用于本次工作区、模型和会话。[候选包多轮验收](../evidence/siwc-prompt-cache-desktop-2026-11-12.md#adapter-候选包的原生多轮验收) · [DSH 请求构造](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/core/agent-loop/src/agent.ts#L729-L745)
 
+## 图片输入
+
+图片输入在 adapter 内复用 DSH 原生附件服务，按目录声明能力并将附件引用转换为 SIWC `input_image`。隔离 Desktop 上的 `gpt-6.1-sol` 通过真实账号首轮识图和同会话图片回放。[Desktop 图片复测](../evidence/siwc-image-desktop-2026-11-12.md)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。

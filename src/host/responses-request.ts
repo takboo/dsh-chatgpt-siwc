@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { LlmError } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
+import type { Context } from '@deepseek-ai/cordis'
+import { IMAGE_OFFLOAD_REQUIRED_CODE, LlmError, offloadedImageText, requiredImageOffload } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, ImageBlock } from '@deepseek-ai/dsh-llm'
 import type { Responses } from 'openai/resources/responses'
 import { z } from 'zod'
 import { providerId } from '../identity.js'
@@ -40,7 +41,47 @@ function invalidHistory(): never {
   throw new LlmError('The conversation contains unsupported content or an incomplete tool exchange.', 'INVALID_REQUEST')
 }
 
-export function prepareResponse(options: GenerateOptions, registration: string, effort?: SiwcReasoningEffort) {
+type RequestImage = Awaited<ReturnType<Context['attachments']['readImageRequest']>>
+export type ReadRequestImage = (ref: ImageBlock['attachment'], signal: AbortSignal) => Promise<RequestImage>
+
+// Use the same inline image budget as DSH's Pi adapter.
+const maxRequestImageBytes = 20 * 1024 * 1024
+
+async function prepareUserImages(options: GenerateOptions, signal: AbortSignal, readImage?: ReadRequestImage) {
+  const images = new Map<ImageBlock, RequestImage>()
+  const sizes = new Map<ImageBlock, number>()
+  let encodedBytes = 0
+  for (const message of options.messages) {
+    if (message.role !== 'user') continue
+    for (const block of message.content) {
+      if (block.type !== 'image' || block.offloaded) continue
+      if (!readImage) invalidHistory()
+      try {
+        signal.throwIfAborted()
+        const image = await readImage(block.attachment, signal)
+        const bytes = image.data.byteLength
+        sizes.set(block, bytes)
+        encodedBytes += 4 * Math.ceil(bytes / 3)
+        if (encodedBytes <= maxRequestImageBytes) images.set(block, image)
+      } catch {
+        signal.throwIfAborted()
+        throw new LlmError('A conversation image could not be read from the attachment store.', 'INVALID_ATTACHMENT')
+      }
+    }
+  }
+  if (encodedBytes > maxRequestImageBytes) {
+    // Tool images use zero bytes but count toward the host's oldest-image prefix.
+    const offloadImages = requiredImageOffload(options.messages, { representation: 'base64', maxBytes: maxRequestImageBytes },
+      block => sizes.get(block) ?? 0)
+    throw new LlmError('The ChatGPT request exceeds its inline image budget.', IMAGE_OFFLOAD_REQUIRED_CODE, { offloadImages })
+  }
+  return images
+}
+
+export async function prepareResponse(
+  options: GenerateOptions, registration: string, effort: SiwcReasoningEffort | undefined,
+  signal: AbortSignal, readImage?: ReadRequestImage,
+) {
   const offered = new Map<string, string>()
   const tools: Responses.FunctionTool[] = []
   const localNames = new Set<string>()
@@ -52,6 +93,7 @@ export function prepareResponse(options: GenerateOptions, registration: string, 
     tools.push({ type: 'function', name, description: tool.description, parameters: tool.parameters, strict: false })
   }
 
+  const images = await prepareUserImages(options, signal, readImage)
   const input: Responses.ResponseInput = []
   const historyCalls = new Set<string>()
   const hostCalls = new Set<string>()
@@ -108,8 +150,27 @@ export function prepareResponse(options: GenerateOptions, registration: string, 
           default: invalidHistory()
         }
       }
+    } else if (message.role === 'user' && message.content.some(block => block.type === 'image' && !block.offloaded)) {
+      const content: Responses.ResponseInputContent[] = []
+      for (const block of message.content) {
+        if (block.type === 'text') {
+          if (block.text) content.push({ type: 'input_text', text: block.text })
+        } else if (block.type === 'image') {
+          if (block.offloaded) content.push({ type: 'input_text', text: offloadedImageText(block.attachment) })
+          else {
+            const image = images.get(block)!
+            const base64 = Buffer.from(image.data).toString('base64')
+            content.push({ type: 'input_image', image_url: `data:${image.mediaType};base64,${base64}`, detail: 'auto' })
+          }
+        } else invalidHistory()
+      }
+      input.push({ role: 'user', content })
     } else {
       const text = message.content.map(block => {
+        if (block.type === 'image') {
+          if (block.offloaded && (message.role === 'user' || message.role === 'tool')) return offloadedImageText(block.attachment)
+          if (message.role === 'tool') return '\n[tool result image omitted]\n'
+        }
         if (block.type !== 'text') invalidHistory()
         return block.text
       }).join('')

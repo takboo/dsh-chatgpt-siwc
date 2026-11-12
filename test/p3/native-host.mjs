@@ -114,13 +114,14 @@ export async function nativeHost(directory, { signIn = true } = {}) {
   }
 }
 
-export async function followup(ctx, agent, text) {
+export async function followup(ctx, agent, input) {
   const idle = Promise.withResolvers()
   const dispose = ctx.on('agent/status', ({ agent: current, status }) => {
     if (current === agent && status === 'idle') idle.resolve()
   })
   try {
-    agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
+    const content = typeof input === 'string' ? [{ type: 'text', text: input }] : input
+    agent.followup(createUserMessage({ content, source: { kind: 'user' } }))
     await idle.promise
     return agent.session.snapshotEvents()
   } finally {

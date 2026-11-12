@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { test } from 'node:test'
 import BasicCompaction from '@deepseek-ai/dsh-compaction-basic'
 import { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -10,6 +11,64 @@ import { assertTurnCompleted, completed, eventsOf, followup, isolated, nativeHos
 function assistant(text) {
   return { type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text }] }
 }
+
+test('native image capability follows the catalog and replays ordered user images from durable references', async t => {
+  const { ctx, workspace, replies, requests, state } = await nativeHost(await isolated(t), { signIn: false })
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1sAAAAASUVORK5CYII=', 'base64')
+  const attachment = Object.freeze({
+    attachmentId: 'sha256:' + createHash('sha256').update(bytes).digest('hex'),
+    bytes: bytes.length, mediaType: 'image/png', width: 1, height: 1,
+  })
+  const image = Object.freeze({ type: 'image', attachment })
+  state.models[0].input_modalities = ['text', 'audio', 'image']
+  state.models.push({ slug: 'invalid-modality', display_name: 'Invalid modality', visibility: 'list', input_modalities: 'image' })
+  let handle
+  try {
+    await ctx.get('siwcFixture').accounts.login()
+    const resolve = () => ctx.llm.resolveModelInfo(route.provider, route.model)
+    assert.deepEqual((await resolve()).inputModalities, ['text'])
+    const reads = []
+    ctx.provide('attachments', {
+      async readImageRequest(ref, target, signal) {
+        assert.deepEqual(ref, attachment)
+        assert.deepEqual(target, { width: 1, height: 1, maxBytes: bytes.length })
+        assert.ok(signal instanceof AbortSignal)
+        reads.push(ref.attachmentId)
+        return { data: bytes, mediaType: 'image/png' }
+      },
+    })
+    assert.deepEqual((await resolve()).inputModalities, ['text', 'image'])
+    assert.deepEqual((await ctx.llm.resolveModelInfo(route.provider, 'invalid-modality')).inputModalities, ['text'])
+    assert.deepEqual((await ctx.llm.listModels(route.provider)).find(model => model.id === route.model).inputModalities, ['text', 'image'])
+
+    handle = await ctx.agents.create({ meta: { cwd: workspace }, agentOptions: route })
+    replies.push(() => textResponse('LEFT'))
+    assertTurnCompleted(await followup(ctx, handle.agent, [
+      { type: 'text', text: 'Look at this:' }, image, { type: 'text', text: 'Read the left marker.' },
+    ]), 1)
+    replies.push(() => textResponse('RIGHT'))
+    assertTurnCompleted(await followup(ctx, handle.agent, 'Read the right marker.'), 2)
+    const firstUser = { role: 'user', content: [
+      { type: 'input_text', text: 'Look at this:' },
+      { type: 'input_image', image_url: 'data:image/png;base64,' + bytes.toString('base64'), detail: 'auto' },
+      { type: 'input_text', text: 'Read the left marker.' },
+    ] }
+    for (const request of requests) {
+      assert.deepEqual(request.input.filter(item => item.role === 'user' && Array.isArray(item.content)), [firstUser])
+    }
+    assert.ok(requests[1].input.some(item => item.role === 'user' && item.content === 'Read the right marker.'))
+    assert.deepEqual(reads, [attachment.attachmentId, attachment.attachmentId])
+    const sessionId = handle.agent.session.id
+    await handle.dispose()
+    handle = undefined
+    const stored = JSON.stringify(await readStored(ctx, sessionId))
+    assert.ok(stored.includes(attachment.attachmentId))
+    assert.ok(!stored.includes(bytes.toString('base64')))
+  } finally {
+    await handle?.dispose()
+    await ctx.fiber.dispose()
+  }
+})
 
 test('native reasoning choices send the selected effort and keep same-session history', async t => {
   const { ctx, workspace, replies, requests, state } = await nativeHost(await isolated(t), { signIn: false })

@@ -65,6 +65,45 @@ test('session-id is stable across refresh and isolated by account and DSH sessio
   }
 })
 
+test('image request projection handles offload and tool placeholders, and rejects unreadable images before fetch', async t => {
+  const { ctx, accounts, state, captured, reply } = await inference(t)
+  state.models[0].input_modalities = ['text', 'image']
+  await accounts.models(true)
+  const attachment = { attachmentId: 'sha256:' + 'a'.repeat(64), name: 'fixture.png',
+    mediaType: 'image/png', bytes: 80, width: 1, height: 1 }
+  const image = { type: 'image', attachment }
+  let read = () => { throw new Error('sensitive native path') }
+  let reads = 0
+  ctx.provide('attachments', { async readImageRequest(...args) { reads++; return read(...args) } })
+  const imageInput = { ...options, messages: [{ role: 'user', content: [image] }] }
+  const unreadable = await Array.fromAsync(ctx.llm.stream(imageInput))
+  assert.equal(unreadable.at(-1).reason.failure.code, 'INVALID_ATTACHMENT')
+  assert.doesNotMatch(JSON.stringify(unreadable), /sensitive native path/)
+  assert.equal(captured.length, 0)
+
+  read = () => ({ data: Buffer.alloc(16 * 1024 * 1024), mediaType: 'image/png' })
+  const overBudget = await Array.fromAsync(ctx.llm.stream(imageInput))
+  assert.equal(overBudget.at(-1).reason.failure.code, 'IMAGE_OFFLOAD_REQUIRED')
+  assert.equal(overBudget.at(-1).reason.failure.offloadImages, 1)
+  assert.equal(captured.length, 0)
+
+  reply(() => sse(complete([message('Final answer.')])))
+  const toolCallId = 'call_with_tool_image'
+  const result = await Array.fromAsync(ctx.llm.stream({ ...options, messages: [
+    { role: 'user', content: [{ ...image, offloaded: true }] },
+    createAssistantMessage({ content: [{ type: 'tool-call', id: toolCallId, name: 'fixture', arguments: '{}' }], source: route }),
+    createToolResultMessage({ callId: toolCallId, content: [{ type: 'text', text: 'Tool read a file.' }, image], isError: false }),
+    user,
+  ] }))
+  assert.deepEqual(result.at(-1).reason, { kind: 'stop' })
+  assert.equal(reads, 2)
+  const { input } = captured[0].body
+  assert.match(input[0].content, /image omitted to fit request image limits/)
+  assert.deepEqual(input[2], { type: 'function_call_output', call_id: toolCallId, output: 'Tool read a file.\n[tool result image omitted]\n' })
+  assert.deepEqual(input[3], { role: 'user', content: 'Start.' })
+  assert.ok(!JSON.stringify(input).includes('input_image'))
+})
+
 test('the prepared DSH route sends one restricted request and replays a namespaced tool exchange', async t => {
   const { ctx, captured, reply, dependencies, path, plugin, state } = await inference(t)
   const longName = 'fixture/tools/' + 'lookup-'.repeat(12)

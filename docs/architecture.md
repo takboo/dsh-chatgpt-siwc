@@ -65,7 +65,8 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - 离线验收使用 DSH 原生压缩引擎和独立的合成摘要路由。SIWC 主请求接收宿主投影后的检查点和保留历史。DSH 把当前可用的 deferred 工具转为即时声明，已移除的工具只保留历史调用及结果。
 - 维护 namespace＋wire name ↔ DSH 工具名的一一映射、call ID 和参数原文。合法编码、长名称、同名、重复 ID、未知 namespace、参数 JSON 错误均有 fixture；未知／越权工具不交给执行层。
 - 工具结果映射回对应 call ID。真实 SIWC Responses 接受至多 64 个字符的 `call_id`。其他 provider 的历史 ID 超过该长度或含有不支持的字符时，出站对调用和结果使用同一个确定性 ID，拒绝碰撞或配对错误。已提交的 DSH 历史保留原 ID。工具调用只有在响应成功结算、参数完整并通过校验后才视作可执行。部分流和失败 attempt 不产生可执行的已完成工具调用。[协议回归](../test/p3/responses.test.mjs)
-- MVP 仅 text＋本地函数工具；向宿主声明准确的 text-only 能力，遵守宿主已有图片 placeholder／文件 handle 投影，不承诺图像理解，也不在 codec 再隐藏丢弃内容。若收到超出声明的原始内容则发送前拒绝。后续按 DSH attachment interface 接入，不能直读任意本机路径替代。
+- 模型目录声明 `image` 且宿主提供 `attachments` 时，adapter 才声明图片能力。DSH 保存并投影附件引用。adapter 通过 `readImageRequest` 读取用户图片，按图文顺序发送 `input_image`，使用 Base64 data URL 和 `detail: "auto"`。续聊按 DSH 保留的历史重新读取引用，工具结果里的图片使用文字占位，保留工具调用关联。
+- 整次请求的内联图片采用 20 MiB Base64 预算。超额通过 DSH 的 `IMAGE_OFFLOAD_REQUIRED` 交给宿主处理，已卸载图片沿用文字占位。附件读取失败在推理发出前报告 `INVALID_ATTACHMENT`。文件仍由 DSH 投影为 handle 文本。[Desktop 图片复测](evidence/siwc-image-desktop-2026-11-12.md)
 - 模型解析向 DSH 提供目录返回的 `context_window`，供宿主规划压缩与切换。缺失或无效时省略容量。标题和压缩摘要请求仍受辅助路由契约约束。[目录字段与取舍](research/responses-protocol-comparison.md#siwc-模型目录字段) · [辅助请求契约](research/dsh-contracts.md#主对话与辅助请求)
 - 每个模型的原生推理档位取账号目录的 `supported_reasoning_levels` 与 adapter 已知请求值的交集。选择器和出站校验共用此结果，显式档位作为每次请求顶层的 `reasoning.effort` 发送。同一会话切换档位时保留完整历史。「提供方默认」省略 `reasoning`。[档位实测](evidence/siwc-reasoning-desktop-2026-11-12.md)
 - 有 DSH `sessionId` 的主请求使用当前注册的指纹派生稳定的 `session-id` HTTP 头。相同注册和会话在令牌刷新后沿用同一头值。不同注册或会话分别派生，独立调用省略此头。缓存配置留在服务端。[请求回归](../test/p3/responses.test.mjs) · [Desktop 缓存记录](evidence/siwc-prompt-cache-desktop-2026-11-12.md)

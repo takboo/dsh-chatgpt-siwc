@@ -12,12 +12,12 @@
 
 ## SIWC 模型目录字段
 
-2026-11-12，真实订阅目录 10 条、可见 8 条，字段名并集为 54 个。插件采用 `slug`、`display_name`、`visibility`、`context_window` 和 `supported_reasoning_levels`。下表记录其余字段的取舍，适用于这个工作区样本。[目录证据](../evidence/default-model-switch-2026-11-12.md) · [档位复测](../evidence/siwc-reasoning-desktop-2026-11-12.md)
+2026-11-12，真实订阅目录 10 条、可见 8 条，字段名并集为 54 个。插件采用 `slug`、`display_name`、`visibility`、`context_window`、`supported_reasoning_levels` 和 `input_modalities`。下表记录相关字段的取舍，适用于这个工作区样本。[目录证据](../evidence/default-model-switch-2026-11-12.md) · [档位复测](../evidence/siwc-reasoning-desktop-2026-11-12.md)
 
-| 未采用字段 | 建议 |
+| 目录字段 | 处理 |
 |---|---|
 | `description`、`priority`、`upgrade`、`availability_nux`、`model_specialty`、`minimal_client_version` | 有模型辨识需求时优先考虑把 `description` 作为有长度上限的纯文本展示。模型顺序继续用目录原顺序，客户端版本、升级和提示交互由 DSH 管理。 |
-| `input_modalities`、`supports_image_detail_original` | 图片接入后再用来约束能力。参考 DSH 的附件投影和同类订阅插件的图片传输测试，先验证用户图片和历史回放，再向模型选择器声明图片支持。[图片用例](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/scripts/image-wire-test.mjs#L49-L96) |
+| `input_modalities`、`supports_image_detail_original` | 按模型的 `input_modalities` 声明图片能力。首版使用 `detail: "auto"`，原图模式需要独立证据。[图片输入方案](#图片输入方案) |
 | `default_reasoning_level`、`supports_reasoning_effort_updates`、`supports_reasoning_summaries`、`supports_reasoning_summary_parameter`、`default_reasoning_summary`、`support_verbosity`、`default_verbosity` | 锁定版 DSH 会把 `defaultEffort` 填入未选档的调用。继续省略它以保留提供方默认。显式改档走下一次请求的顶层 `reasoning.effort`。OpenCode 的公开订阅路由也关闭中途 effort 更新。摘要和 verbosity 各自需要协议证据和用例支持。[DSH 默认档语义](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm/src/index.ts#L919-L944) · [OpenCode 订阅路由](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/plugin/provider/chatgpt.ts#L21-L60) |
 | `max_context_window`、`auto_compact_token_limit`、`comp_hash`、`truncation_policy`、`supports_experimental_context` | 采用较小的实际目录 `context_window`。Codex 分别表示默认容量、配置上限和压缩阈值。OpenCode 也为订阅推理单独设预算。把这些字段直接写入 DSH 会改变宿主压缩或历史策略，当前无此需求。[Codex 容量语义](https://github.com/openai/codex/blob/c0cc9fc820f62e4dbdde68214dd6d792d6c8a7ee/codex-rs/protocol/src/openai_models.rs#L444-L462) · [OpenCode 输入预算](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/plugin/provider/openai-context-caps.ts#L9-L49) |
 | `additional_speed_tiers`、`service_tiers`、`default_service_tier`、`prefer_websockets`、`use_responses_lite` | 保留已验收的 HTTP/SSE。速度档会改变请求和订阅消耗，另有需求时再验证。 |
@@ -32,6 +32,7 @@
 2026-11-12，用已脱敏的账号目录样本、固定 DSH `0.2.2-rc.1` 和开源源码复核。
 
 - **推理档位的模型覆盖。** 样本中八个可见模型均列出 `low`、`medium`、`high`、`xhigh`、`max`。这五个已知请求值和所选模型目录的交集决定原生选项。已在 `gpt-6.1-terra` 追加实机验证。同宿主的 `ckanner/dsh-plugin-chatgpt` 记录了 `gpt-6-astra` 和 `gpt-6.1-terra` 目录列出 `ultra`、实际请求返回 `400 invalid_value` 的第三方实测。Codex 自身也将 `Ultra` 解析为其他实际请求档位。[Terra Desktop 实测](../evidence/siwc-reasoning-desktop-2026-11-12.md#逐模型目录档位与-terra-续聊) · [同宿主档位实测](https://github.com/ckanner/dsh-plugin-chatgpt/blob/2138cb9cba1598b3617826f04ac1ebdf8974bc99/src/models/served.ts#L38-L53) · [实测说明](https://github.com/ckanner/dsh-plugin-chatgpt/blob/2138cb9cba1598b3617826f04ac1ebdf8974bc99/src/models/served.ts#L71-L79) · [Codex 档位解析](https://github.com/openai/codex/blob/56a8470aa0b0c5b9f174f449a697fe6ccc6d9462/codex-rs/protocol/src/openai_models/reasoning_effort.rs#L10-L35)
+- **图片输入。** 样本的八个可见模型均声明 `text,image`。adapter 按当前模型目录和宿主附件服务声明能力，DSH 用这一声明判定是否接收图片。[DSH 图片准入](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/api/session-controller/src/commands.ts#L304-L329) · [图片输入方案](#图片输入方案)
 
 ### DSH 档位与请求值
 
@@ -39,6 +40,16 @@
 - DSH 内置 pi-ai 支持可选的逐模型 `reasoningEfforts`，将原生档位 ID 映射到自定义网关的请求值。该配置由 pi-ai adapter 解析成 `thinkingLevelMap`。同宿主 `dsh-chatgpt-plan` 根据每个 SIWC 模型的目录自动生成同名映射。同宿主 `ckanner/dsh-plugin-chatgpt` 优先将已知模型的目录档位与其内置已知值核对。OpenCode 也提供目录默认档位和可选的用户自定义 `variants`。[DSH pi-ai 配置](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-pi-ai/README.md#run-with-reasoning-and-wire-compatibility) · [同名映射](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/adapter.mjs#L26-L37) · [同宿主目录校验](https://github.com/ckanner/dsh-plugin-chatgpt/blob/2138cb9cba1598b3617826f04ac1ebdf8974bc99/src/models/describe.ts#L137-L171) · [OpenCode variants](https://opencode.ai/docs/models/#variants)
 
 adapter 沿用原生档位 ID 和选择器，按每个模型的 SIWC 目录与已知请求值取交集，选择器和出站校验共用该结果。新模型声明已有档位时随目录刷新自动呈现。用户自行映射留到有改名或兼容性需求时，再考虑采用与 DSH pi-ai 一致的可选覆盖语义。
+
+### 图片输入方案
+
+2026-11-12，源码对照覆盖 DSH `0.2.2-rc.1` 和 `WillQvQ/dsh-chatgpt-plan` 的固定提交。DSH 基础配置已挂载附件服务，宿主完成上传、规范化和会话引用保存。同宿主插件把目录能力和 `ctx.get('attachments')` 接给 `PiAiAdapter`。其替身传输测试检查用户图片、工具结果图片和无效引用。公开 SIWC 文档确认模型可接受图片时支持图像输入。本项目随后用真实账号验证了 SIWC 首轮识图和历史图片回放。[DSH 基础配置](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/bundle/base/cordis.patch.yml#L143-L147) · [同宿主接线](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/adapter.mjs#L25-L35) · [附件接入](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/adapter.mjs#L66-L76) · [图片测试](https://github.com/WillQvQ/dsh-chatgpt-plan/blob/7d1ce4b0e61fdaa5dca8136fb2f352834ae42b8a/scripts/image-wire-test.mjs#L27-L73) · [SIWC 预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations#responses-api-requirements)
+
+1. 从当前账号的模型目录读取 `input_modalities`。当该模型声明 `image` 且宿主提供附件服务时，在列表和实际调用的模型元数据中一致声明 `inputModalities: ['text', 'image']`。缺字段或服务时走现有纯文本路径。
+2. 在现有 Responses adapter 中读取用户消息和历史里的 `ImageAttachmentRef`。通过 `attachments.readImageRequest(ref, target, signal)` 取请求版本，初始尺寸采用 `LlmAdapter` 的默认目标。保留图文顺序，用返回的 MIME 和字节编码为 Base64 data URL，发送 `input_image` 和 `detail: "auto"`。每轮 HTTP/SSE 请求携带当前需要的历史，会话继续存引用。无法读取的引用应在发出请求前明确失败。[DSH 附件接口](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/attachment/attachment/src/index.ts#L270-L288) · [默认图片目标](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm/src/index.ts#L240-L250) · [OpenAI 图像输入](https://developers.openai.com/api/docs/guides/images-vision)
+3. 按实际 Base64 体积检查本次请求图片预算，借用 DSH `requiredImageOffload` 和 `IMAGE_OFFLOAD_REQUIRED`，复用宿主默认的历史图片卸载。先以 DSH Pi 和同宿主插件的 20 MiB 图片预算为本地参考值，SIWC 端上限待验证。宿主给图片模型传递工具结果里的图片引用，首版应保留工具结果文字和 `call_id`，给其中的图片留明确占位。工具结果里的实际图片字节可单独验证。[DSH 消息投影](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm/src/index.ts#L1100-L1122) · [预算计算](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm/src/content.ts#L307-L332) · [DSH Pi 默认预算](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-pi-ai/src/config.ts#L49-L58) · [宿主卸载](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/bundle/base/cordis.patch.yml#L431-L435)
+
+替身传输已验证图文顺序、同会话回放、纯文本路径、已卸载图片和无效引用。隔离 Desktop 使用 `gpt-6.1-sol` 发送一张含两个不同标记的 PNG，首轮只问左侧，续聊时只用文字追问右侧，两次均正确。[Desktop 图片复测](../evidence/siwc-image-desktop-2026-11-12.md)
 
 ## 第三方实现事实
 

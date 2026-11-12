@@ -6,6 +6,7 @@ import type { InferenceGrant } from './accounts.js'
 import type { SiwcReasoningEffort } from './catalog.js'
 import { resource, SiwcFault } from './oauth.js'
 import { prepareResponse } from './responses-request.js'
+import type { ReadRequestImage } from './responses-request.js'
 import { settleResponses } from './responses-stream.js'
 
 const endpoint = resource + '/responses'
@@ -56,7 +57,7 @@ function providerFailure(code: string | undefined, status?: number, headers?: He
 
 export async function* responses(
   options: GenerateOptions, grant: InferenceGrant | undefined, fetch: typeof globalThis.fetch | undefined,
-  reasoningEfforts: readonly SiwcReasoningEffort[] = [],
+  reasoningEfforts: readonly SiwcReasoningEffort[], readImage?: ReadRequestImage,
 ): AsyncGenerator<StreamChunk> {
   if (options.purpose !== undefined || options.temperature !== undefined || options.maxTokens !== undefined ||
     options.stop !== undefined) {
@@ -68,8 +69,6 @@ export async function* responses(
   }
   if (!fetch) throw new LlmError('ChatGPT inference is unavailable in this build.', 'SIWC_UNAVAILABLE')
   if (!grant) throw new LlmError('Connect a ChatGPT account with plan access before requesting inference.', 'AUTH')
-  const request = prepareResponse(options, grant.registration, effort)
-
   const operation = new AbortController()
   const deadline = new AbortController()
   const timer = setTimeout(() => deadline.abort(), timeoutMs)
@@ -77,6 +76,8 @@ export async function* responses(
   const signal = AbortSignal.any([operation.signal, deadline.signal, grant.signal, ...(options.signal ? [options.signal] : [])])
   let upstream: Response | undefined
   try {
+    const request = await prepareResponse(options, grant.registration, effort, signal, readImage)
+    signal.throwIfAborted()
     const token = await grant.access(signal)
     const headers = attributionHeaders()
     if (options.sessionId !== undefined) {
