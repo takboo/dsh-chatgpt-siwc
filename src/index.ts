@@ -1,10 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-authorization'
 import { credentialKeyScope } from '@deepseek-ai/dsh-credentials'
-import { LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { planLabel, providerId } from './identity.js'
 import { Accounts } from './host/accounts.js'
+import { testedReasoningModel } from './host/catalog.js'
+import type { CatalogModel } from './host/catalog.js'
 import { OAuth } from './host/oauth.js'
 import type { OAuthDependencies } from './host/oauth.js'
 import { responses } from './host/responses.js'
@@ -36,30 +38,45 @@ class ChatGptAdapter extends LlmAdapter {
   }
 
   override async resolveModel(provider: string, model: string, signal?: AbortSignal) {
-    const models = await this.accounts.models(false, signal).catch(() => [])
-    const match = models.find(item => item.id === model)
-    const contextWindow = match?.contextWindow
-    return {
-      ...this.modelInfo(provider, model), name: match?.name ?? model,
-      ...(contextWindow === undefined ? {} : { context: { contextWindow } }),
-    }
+    return this.modelInfo(provider, model, await this.catalogModel(model, signal))
   }
 
-  private modelInfo(provider: string, model: string) {
-    return { provider, id: model, name: model, inputModalities: ['text'] as const, systemPromptUpdate: 'in-history' as const }
+  private async catalogModel(model: string, signal?: AbortSignal) {
+    const models = await this.accounts.models(false, signal).catch(() => [])
+    signal?.throwIfAborted()
+    return models.find(item => item.id === model)
+  }
+
+  private modelInfo(provider: string, model: string, match?: CatalogModel) {
+    const contextWindow = match?.contextWindow
+    const efforts = match?.reasoningEfforts?.map(effort => ({
+      id: ReasoningEffortId(effort),
+      name: effort === 'xhigh' ? 'Extra High' : effort.charAt(0).toUpperCase() + effort.slice(1),
+    }))
+    return {
+      provider, id: model, name: match?.name ?? model, inputModalities: ['text'] as const,
+      systemPromptUpdate: 'in-history' as const,
+      ...(contextWindow === undefined ? {} : { context: { contextWindow } }),
+      ...(efforts === undefined ? {} : { reasoning: { efforts } }),
+    }
   }
 
   override async prepareCall(provider: string, model: string, signal?: AbortSignal) {
     const grant = await this.accounts.prepareInference(signal)
+    let match: CatalogModel | undefined
+    if (grant && model === testedReasoningModel) {
+      match = await this.catalogModel(model, grant.signal)
+      await grant.assertCurrent()
+    }
     return {
-      model: this.modelInfo(provider, model),
-      stream: (options: GenerateOptions) => responses(options, grant, this.fetch),
+      model: this.modelInfo(provider, model, match),
+      stream: (options: GenerateOptions) => responses(options, grant, this.fetch, match?.reasoningEfforts ?? []),
     }
   }
 
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    const grant = await this.accounts.prepareInference(options.signal)
-    yield* responses(options, grant, this.fetch)
+    const prepared = await this.prepareCall(options.provider, options.model, options.signal)
+    yield* prepared.stream(options)
   }
 }
 

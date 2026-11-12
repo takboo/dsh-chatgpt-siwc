@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import BasicCompaction from '@deepseek-ai/dsh-compaction-basic'
-import { LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { sse } from '../p0/sse.mjs'
@@ -10,6 +10,48 @@ import { assertTurnCompleted, completed, eventsOf, followup, isolated, nativeHos
 function assistant(text) {
   return { type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text }] }
 }
+
+test('native reasoning choices send the selected effort and keep same-session history', async t => {
+  const { ctx, workspace, replies, requests, state } = await nativeHost(await isolated(t), { signIn: false })
+  const tested = { provider: route.provider, model: 'gpt-6.1-sol' }
+  const levels = ['low', 'medium', 'high', 'xhigh', 'max']
+  const entries = [...levels, 'ultra', 'high'].map(effort => ({ effort }))
+  state.models[0].supported_reasoning_levels = entries
+  state.models.push({
+    slug: tested.model, display_name: 'GPT-6.1 Sol', visibility: 'list',
+    supported_reasoning_levels: [null, ...entries], default_reasoning_level: 'medium',
+  })
+  let handle
+  try {
+    await ctx.get('siwcFixture').accounts.login()
+    const info = await ctx.llm.resolveModelInfo(tested.provider, tested.model)
+    assert.deepEqual(info.reasoning?.efforts.map(effort => effort.id), levels)
+    assert.equal(info.reasoning?.defaultEffort, undefined)
+    assert.equal((await ctx.llm.resolveModelInfo(route.provider, route.model)).reasoning, undefined)
+    const select = effort => ({ ...tested, reasoningEffort: ReasoningEffortId(effort) })
+    await assert.rejects(ctx.llm.prepareCall(select('ultra')), error => error.failure?.code === 'UNSUPPORTED_REASONING_EFFORT')
+    assert.equal(requests.length, 0)
+
+    handle = await ctx.agents.create({ meta: { cwd: workspace }, agentOptions: tested })
+    handle.agent.model.select(select('high'))
+    replies.push(() => completed(opaqueReasoning, assistant('I will remember it.')))
+    assertTurnCompleted(await followup(ctx, handle.agent, 'Remember ALDER-73.'), 1)
+    handle.agent.model.select(select('max'))
+    replies.push(() => textResponse('ALDER-73'))
+    assertTurnCompleted(await followup(ctx, handle.agent, 'What was the marker?'), 2)
+    handle.agent.model.select(tested)
+    replies.push(() => textResponse())
+    assertTurnCompleted(await followup(ctx, handle.agent, 'Use the provider default.'), 3)
+
+    assert.deepEqual(requests.map(body => body.reasoning), [{ effort: 'high' }, { effort: 'max' }, undefined])
+    assert.ok(requests[1].input.some(item => item.role === 'user' && item.content === 'Remember ALDER-73.'))
+    assert.deepEqual(requests[1].input.find(item => item.type === 'reasoning'), opaqueReasoning)
+    assert.equal(requests[1].input.some(item => item.type === 'configuration_update'), false)
+  } finally {
+    await handle?.dispose()
+    await ctx.fiber.dispose()
+  }
+})
 
 test('default compaction allows switching an existing session to a SIWC model with catalog capacity', async t => {
   const { ctx, workspace, replies, requests, state } = await nativeHost(await isolated(t), { signIn: false })

@@ -4,6 +4,7 @@ import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import type { Responses } from 'openai/resources/responses'
 import { z } from 'zod'
 import { providerId } from '../identity.js'
+import type { SiwcReasoningEffort } from './catalog.js'
 
 export const toolNamespace = 'dsh'
 export const callIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
@@ -39,7 +40,7 @@ function invalidHistory(): never {
   throw new LlmError('The conversation contains unsupported content or an incomplete tool exchange.', 'INVALID_REQUEST')
 }
 
-export function prepareResponse(options: GenerateOptions, registration: string) {
+export function prepareResponse(options: GenerateOptions, registration: string, effort?: SiwcReasoningEffort) {
   const offered = new Map<string, string>()
   const tools: Responses.FunctionTool[] = []
   const localNames = new Set<string>()
@@ -135,6 +136,7 @@ export function prepareResponse(options: GenerateOptions, registration: string) 
       store: false,
       stream: true,
       include: ['reasoning.encrypted_content'],
+      ...(effort === undefined ? {} : { reasoning: { effort } }),
       ...(tools.length ? { tools: [{ type: 'namespace', name: toolNamespace, description: 'Local DeepSeek Harness tools', tools }] } : {}),
     } satisfies Responses.ResponseCreateParamsStreaming,
   }

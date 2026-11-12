@@ -3,8 +3,14 @@ import { z } from 'zod'
 import type { ModelView } from '../view.js'
 import { OAuth, SiwcFault, readJson, resource } from './oauth.js'
 
+// These explicit levels completed with a real SIWC subscription on this model.
+export const testedReasoningModel = 'gpt-6.1-sol'
+const testedEfforts = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+export type SiwcReasoningEffort = typeof testedEfforts[number]
+
 export interface CatalogModel extends ModelView {
   contextWindow?: number
+  reasoningEfforts?: readonly SiwcReasoningEffort[]
 }
 
 const catalogSchema = z.object({ models: z.array(z.unknown()).max(8192) })
@@ -13,6 +19,8 @@ const modelSchema = z.object({
   display_name: z.string().trim().min(1).max(256),
   visibility: z.literal('list'),
   context_window: z.int().positive().optional().catch(undefined),
+  supported_reasoning_levels: z.array(z.object({ effort: z.string() }).optional().catch(undefined))
+    .max(128).optional().catch(undefined),
 })
 
 export async function fetchCatalog(api: OAuth, token: string, signal: AbortSignal): Promise<CatalogModel[]> {
@@ -34,8 +42,13 @@ export async function fetchCatalog(api: OAuth, token: string, signal: AbortSigna
   for (const value of payload.data.models) {
     const model = modelSchema.safeParse(value)
     if (model.success && !models.has(model.data.slug)) {
-      const { slug, display_name: name, context_window: contextWindow } = model.data
-      models.set(slug, { id: slug, name, ...(contextWindow === undefined ? {} : { contextWindow }) })
+      const { slug, display_name: name, context_window: contextWindow, supported_reasoning_levels: levels } = model.data
+      const advertised = new Set(levels?.map(level => level?.effort))
+      const reasoningEfforts = slug === testedReasoningModel ? testedEfforts.filter(effort => advertised.has(effort)) : []
+      models.set(slug, {
+        id: slug, name, ...(contextWindow === undefined ? {} : { contextWindow }),
+        ...(reasoningEfforts.length === 0 ? {} : { reasoningEfforts }),
+      })
     }
   }
   return [...models.values()]

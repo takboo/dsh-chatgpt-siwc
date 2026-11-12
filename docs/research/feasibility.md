@@ -22,6 +22,10 @@
 - **目录实测与采用。** 一个真实订阅工作区的可见模型全部返回正整数 `context_window`。`gpt-6.1-sol` 为 500,000，`gpt-6-sol` 为 272,000。adapter 采用目录值。公开目录文档尚未承诺此字段，缺失或无效时保留模型，省略容量。[双宿主复测](../evidence/default-model-switch-2026-11-12.md) · [字段评估](responses-protocol-comparison.md#siwc-模型目录字段) · [官方模型目录](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference#1-list-available-models)
 - **待实测。** 已通过短会话切换和续聊。达到压缩阈值后的摘要仍依赖兼容的摘要路由。[辅助请求契约](dsh-contracts.md#主对话与辅助请求)
 
+## 推理档位
+
+在隔离 Desktop Host 内直连公开 SIWC，`gpt-6.1-sol` 的 `low`、`medium`、`high`、`xhigh`、`max` 均完成，服务端回显与请求一致。adapter 只为这个模型声明账号目录也列出的实测档位。DSH 原生选择器显示五档和 `Default`。选默认时，adapter 省略请求的 `reasoning`，由 SIWC 决定档位。候选包在 Desktop 的同一持久会话里从 `high` 切到 `max` 后正确续聊。结果覆盖实测模型、订阅工作区和 Desktop 版本。[Desktop 实测](../evidence/siwc-reasoning-desktop-2026-11-12.md)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。

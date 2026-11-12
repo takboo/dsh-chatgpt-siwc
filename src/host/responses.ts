@@ -2,6 +2,7 @@ import { attributionHeaders, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, ProviderReq
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import OpenAI from 'openai'
 import type { InferenceGrant } from './accounts.js'
+import type { SiwcReasoningEffort } from './catalog.js'
 import { resource, SiwcFault } from './oauth.js'
 import { prepareResponse } from './responses-request.js'
 import { settleResponses } from './responses-stream.js'
@@ -54,14 +55,19 @@ function providerFailure(code: string | undefined, status?: number, headers?: He
 
 export async function* responses(
   options: GenerateOptions, grant: InferenceGrant | undefined, fetch: typeof globalThis.fetch | undefined,
+  reasoningEfforts: readonly SiwcReasoningEffort[] = [],
 ): AsyncGenerator<StreamChunk> {
   if (options.purpose !== undefined || options.temperature !== undefined || options.maxTokens !== undefined ||
-    options.stop !== undefined || options.reasoningEffort !== undefined) {
+    options.stop !== undefined) {
     throw new LlmError('This request option or purpose is unsupported by ChatGPT plan usage.', 'UNSUPPORTED_OPTION')
+  }
+  const effort = reasoningEfforts.find(effort => effort === options.reasoningEffort)
+  if (options.reasoningEffort !== undefined && effort === undefined) {
+    throw new LlmError('This reasoning effort is unavailable for the selected ChatGPT model.', 'UNSUPPORTED_REASONING_EFFORT')
   }
   if (!fetch) throw new LlmError('ChatGPT inference is unavailable in this build.', 'SIWC_UNAVAILABLE')
   if (!grant) throw new LlmError('Connect a ChatGPT account with plan access before requesting inference.', 'AUTH')
-  const request = prepareResponse(options, grant.registration)
+  const request = prepareResponse(options, grant.registration, effort)
 
   const operation = new AbortController()
   const deadline = new AbortController()
