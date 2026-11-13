@@ -57,7 +57,7 @@ function providerFailure(code: string | undefined, status?: number, headers?: He
 
 export async function* responses(
   options: GenerateOptions, grant: InferenceGrant | undefined, fetch: typeof globalThis.fetch | undefined,
-  reasoningEfforts: readonly SiwcReasoningEffort[], readImage?: ReadRequestImage,
+  reasoningEfforts: readonly SiwcReasoningEffort[], requestSummary: boolean, readImage?: ReadRequestImage,
 ): AsyncGenerator<StreamChunk> {
   if (options.purpose !== undefined || options.temperature !== undefined || options.maxTokens !== undefined ||
     options.stop !== undefined) {
@@ -76,7 +76,7 @@ export async function* responses(
   const signal = AbortSignal.any([operation.signal, deadline.signal, grant.signal, ...(options.signal ? [options.signal] : [])])
   let upstream: Response | undefined
   try {
-    const request = await prepareResponse(options, grant.registration, effort, signal, readImage)
+    const request = await prepareResponse(options, grant.registration, effort, requestSummary, signal, readImage)
     signal.throwIfAborted()
     const token = await grant.access(signal)
     const headers = attributionHeaders()

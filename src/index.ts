@@ -86,6 +86,7 @@ class ChatGptAdapter extends LlmAdapter {
     return {
       model: this.modelInfo(provider, model, match, attachments !== undefined),
       stream: (options: GenerateOptions) => responses(options, grant, this.fetch, match?.reasoningEfforts ?? [],
+        match?.supportsReasoningSummary === true,
         attachments && ((ref, signal) => attachments.readImageRequest(ref, this.imageRequestTarget(provider, model, ref), signal))),
     }
   }

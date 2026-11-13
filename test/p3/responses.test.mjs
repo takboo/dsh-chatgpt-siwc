@@ -30,6 +30,79 @@ async function inference(t) {
   return { ...result, dependencies, state, captured, reply(handler) { reply = handler } }
 }
 
+test('concise summary requests follow each model capability and preserve provider default effort', async t => {
+  const { ctx, accounts, captured, reply, state } = await inference(t)
+  Object.assign(state.models[0], {
+    supports_reasoning_summary_parameter: true, supported_reasoning_levels: [{ effort: 'high' }],
+  })
+  for (const [slug, capability] of [['disabled', false], ['missing', undefined], ['malformed', 'true']]) {
+    state.models.push({ slug, display_name: slug, visibility: 'list', supports_reasoning_summary_parameter: capability,
+      supports_reasoning_summaries: true, supported_reasoning_levels: [{ effort: 'high' }] })
+  }
+  await accounts.models(true)
+  reply(() => sse(complete([message('Fixture answer.')])))
+  const cases = [
+    [route.model, undefined, { summary: 'concise' }],
+    [route.model, 'high', { effort: 'high', summary: 'concise' }],
+    ['disabled', 'high', { effort: 'high' }],
+    ['missing', undefined, undefined],
+    ['malformed', undefined, undefined],
+  ]
+  for (const [model, reasoningEffort, expected] of cases) {
+    const chunks = await Array.fromAsync(ctx.llm.stream({ ...options, model, reasoningEffort }))
+    assert.equal(chunks.at(-1).reason.kind, 'stop')
+    assert.deepEqual(captured.at(-1).body.reasoning, expected)
+  }
+})
+
+test('summary deltas precede text and settle once while preserving ordered encrypted replay', async t => {
+  const { ctx, captured, reply } = await inference(t)
+  const reasoning = { type: 'reasoning', id: 'rs_fixture', summary: [], encrypted_content: 'opaque-fixture' }
+  const summary = text => ({ type: 'summary_text', text })
+  const event = (type, summary_index, fields, item_id = reasoning.id) => ({
+    type: 'response.reasoning_summary_' + type, output_index: 0, summary_index, item_id, ...fields,
+  })
+  const final = { ...reasoning, summary: [summary('Plan'), summary('Check')], encrypted_content: null }
+  reply(() => sse(
+    event('text.delta', 0, { delta: 'Pl' }),
+    event('text.done', 0, { text: 'Plan' }),
+    event('part.done', 0, { part: summary('Plan') }),
+    event('text.delta', 1, { delta: 'Check' }),
+    { type: 'response.output_item.done', output_index: 0, item: reasoning },
+    delta('Answer', 1), complete([final, message('Answer')]),
+  ))
+  const chunks = await Array.fromAsync(ctx.llm.stream(options))
+  assert.deepEqual(chunks.filter(chunk => chunk.type === 'reasoning-delta').map(chunk => chunk.text), ['Pl', 'an', '\nCheck'])
+  assert.ok(chunks.findIndex(chunk => chunk.type === 'reasoning-delta') < chunks.findIndex(chunk => chunk.type === 'text-delta'))
+  assert.equal(chunks.filter(chunk => chunk.type === 'block-start' && chunk.blockType === 'reasoning').length, 1)
+  assert.equal(chunks.filter(chunk => chunk.type === 'block-end' && chunk.block.type === 'reasoning').length, 1)
+  const assembler = new BlockAssembler()
+  chunks.forEach(chunk => assembler.push(chunk))
+  assert.deepEqual(assembler.blocks(), [{ type: 'reasoning', text: 'Plan\nCheck' }, { type: 'text', text: 'Answer' }])
+  const assistant = createAssistantMessage({ content: assembler.blocks(), source: { ...route, replayState: assembler.replayState } })
+  reply(() => sse(complete([message('Continued')])))
+  await Array.fromAsync(ctx.llm.stream({ ...options, messages: [user, assistant, user] }))
+  assert.deepEqual(captured.at(-1).body.input.slice(1, 3), [
+    { ...final, encrypted_content: reasoning.encrypted_content }, { role: 'assistant', content: 'Answer' },
+  ])
+
+  reply(() => sse(
+    event('text.delta', 0, { delta: 'Only streamed' }),
+    complete([reasoning, message('Answer')]),
+  ))
+  const deltaOnly = await Array.fromAsync(ctx.llm.stream(options))
+  assert.equal(deltaOnly.find(chunk => chunk.type === 'block-end' && chunk.block.type === 'reasoning').block.text, 'Only streamed')
+  assert.deepEqual(deltaOnly.at(-1).replayState.blocks[0].reasoning, reasoning)
+  const interrupted = createAssistantMessage({ content: [{ type: 'reasoning', text: 'Stopped before settlement' }], source: route })
+  reply(() => sse(complete([message('Continued')])))
+  await Array.fromAsync(ctx.llm.stream({ ...options, messages: [user, interrupted, user] }))
+  assert.ok(captured.at(-1).body.input.every(item => item.type !== 'reasoning'))
+
+  reply(() => sse(event('text.delta', 0, { delta: 'Wrong item' }, 'rs_other'), complete([reasoning, message('Answer')])))
+  const mismatched = await Array.fromAsync(ctx.llm.stream(options))
+  assert.equal(mismatched.at(-1).reason.failure.code, 'INVALID_RESPONSE')
+})
+
 test('session-id is stable across refresh and isolated by account and DSH session', async t => {
   const { ctx, accounts, captured, reply, state } = await inference(t)
   const original = (await accounts.view()).active

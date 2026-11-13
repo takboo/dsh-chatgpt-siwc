@@ -15,6 +15,7 @@
 | W6 复测 | [SIWC 提示缓存 Desktop 对照](siwc-prompt-cache-desktop-2026-11-12.md) |
 | T1 探针 | [SIWC 并行工具目录 Desktop 复测](siwc-parallel-tools-desktop-2026-11-13.md) |
 | W3、W6、L5 复测 | [SIWC 多图用量与默认压缩阈值](siwc-image-tokens-desktop-2026-11-13.md) |
+| W1、W2、W4、W6 探针 | [SIWC 推理摘要 Desktop 对照](siwc-reasoning-summary-desktop-2026-11-13.md) |
 
 ## 记录模板
 

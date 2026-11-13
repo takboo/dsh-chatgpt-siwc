@@ -43,6 +43,11 @@ const completed = z.object({
   usage: z.unknown().optional(),
 })
 const textDelta = z.object({ output_index: count, content_index: count, delta: z.string() })
+const summaryEvent = z.object({
+  output_index: count.max(4095),
+  summary_index: count.max(127),
+  item_id: reasoningReplay.shape.id.optional(),
+})
 const progress = new Set([
   'response.created', 'response.queued', 'response.in_progress',
   // SIWC may send metadata and keepalive between deltas and completion.
@@ -52,8 +57,7 @@ const progress = new Set([
   'response.output_text.done', 'response.output_text.annotation.added',
   'response.refusal.delta', 'response.refusal.done',
   'response.function_call_arguments.delta', 'response.function_call_arguments.done',
-  'response.reasoning_summary_part.added', 'response.reasoning_summary_part.done',
-  'response.reasoning_summary_text.delta', 'response.reasoning_summary_text.done',
+  'response.reasoning_summary_part.added',
   'response.reasoning_text.delta', 'response.reasoning_text.done',
 ])
 
@@ -62,6 +66,22 @@ interface OutputBlock {
   block: ContentBlock
   reasoning?: z.infer<typeof reasoningReplay>
   phase?: z.infer<typeof assistantPhase>
+}
+
+interface SummaryStream {
+  id?: string
+  parts: Map<number, { text: string; done: boolean }>
+}
+
+function liveSummary({ parts }: SummaryStream): string {
+  const text: string[] = []
+  for (let i = 0; i < parts.size; i++) {
+    const part = parts.get(i)
+    if (!part) break
+    if (part.text) text.push(part.text)
+    if (!part.done) break
+  }
+  return text.join('\n')
 }
 
 function invalidStream(detail = 'returned an invalid or unsupported stream event'): never {
@@ -104,7 +124,8 @@ export function toUsage(value: unknown): TokenUsage | undefined {
 
 function outputBlocks(
   output: z.infer<typeof completed>['output'], offered: ReadonlyMap<string, string>, historyCalls: ReadonlySet<string>,
-  reasoningItems: ReadonlyMap<number, z.infer<typeof reasoningReplay>>,
+  reasoningItems: ReadonlyMap<number, z.infer<typeof reasoningDone>>,
+  summaries: ReadonlyMap<number, SummaryStream>,
 ): OutputBlock[] {
   const ids = new Set(historyCalls)
   return output.flatMap((item, i): OutputBlock[] => {
@@ -124,12 +145,24 @@ function outputBlocks(
         return [{ key: String(i), block: { type: 'tool-call', id: ToolCallId(item.call_id), name, arguments: item.arguments } }]
       }
       case 'reasoning': {
-        const parsed = reasoningReplay.safeParse(reasoningItems.get(i) ?? item)
-        if (!parsed.success || parsed.data.id !== item.id) invalidStream('returned a reasoning item without matching replay data')
+        const done = reasoningItems.get(i)
+        const summary = summaries.get(i)
+        const parts = Array.from({ length: Math.max(item.summary.length, done?.summary.length ?? 0) }, (_, index) => {
+          const terminal = item.summary[index]
+          const snapshot = done?.summary[index]
+          return terminal?.text.trim() ? terminal : snapshot ?? terminal!
+        })
+        const parsed = reasoningReplay.safeParse({
+          ...item, summary: parts, encrypted_content: item.encrypted_content ?? done?.encrypted_content,
+        })
+        if (!parsed.success) invalidStream('returned a reasoning item without matching replay data')
         const reasoning = parsed.data
+        const partCount = Math.max(parts.length, ...Array.from(summary?.parts.keys() ?? [], index => index + 1))
+        const text = Array.from({ length: partCount }, (_, index) =>
+          parts[index]?.text.trim() ? parts[index]!.text : summary?.parts.get(index)?.text ?? '').filter(Boolean).join('\n')
         return [{
           key: String(i), reasoning,
-          block: { type: 'reasoning', text: reasoning.summary.map(part => part.text).join('\n') },
+          block: { type: 'reasoning', text },
         }]
       }
     }
@@ -146,8 +179,9 @@ export async function* settleResponses(
   failure: (code?: string) => LlmError,
   contentTypeDeclared: boolean,
 ): AsyncGenerator<StreamChunk> {
-  const partial = new Map<string, { text: string; index: number }>()
-  const reasoningItems = new Map<number, z.infer<typeof reasoningReplay>>()
+  const partial = new Map<string, { text: string; index: number; type: 'text' | 'reasoning' }>()
+  const reasoningItems = new Map<number, z.infer<typeof reasoningDone>>()
+  const summaries = new Map<number, SummaryStream>()
   let receivedEvent = false
   for await (const event of events) {
     signal.throwIfAborted()
@@ -161,12 +195,52 @@ export async function* settleResponses(
         let block = partial.get(key)
         if (!block) {
           if (partial.size >= 4096) invalidStream('exceeded the response block limit')
-          block = { text: '', index: partial.size }
+          block = { text: '', index: partial.size, type: 'text' }
           partial.set(key, block)
           yield { type: 'block-start', index: block.index, blockType: 'text' }
         }
         block.text += result.data.delta
         yield { type: 'text-delta', index: block.index, text: result.data.delta }
+        break
+      }
+      case 'response.reasoning_summary_text.delta':
+      case 'response.reasoning_summary_text.done':
+      case 'response.reasoning_summary_part.done': {
+        const parsed = summaryEvent.safeParse(event)
+        const delta = event.type === 'response.reasoning_summary_text.delta'
+        const text = event.type === 'response.reasoning_summary_text.delta' ? event.delta
+          : event.type === 'response.reasoning_summary_text.done' ? event.text : event.part?.text
+        if (!parsed.success || typeof text !== 'string') invalidStream('returned an invalid reasoning summary event')
+        const { output_index, summary_index, item_id } = parsed.data
+        let summary = summaries.get(output_index)
+        if (!summary) {
+          summary = { parts: new Map() }
+          summaries.set(output_index, summary)
+        }
+        if (item_id && summary.id && item_id !== summary.id) invalidStream('changed the reasoning summary item ID')
+        summary.id ??= item_id
+        const previous = summary.parts.get(summary_index)
+        if (delta && previous?.done) break
+        summary.parts.set(summary_index, {
+          text: delta ? (previous?.text ?? '') + text : text || previous?.text || '',
+          done: !delta,
+        })
+        const display = liveSummary(summary)
+        if (!display.trim()) break
+        const key = String(output_index)
+        let block = partial.get(key)
+        if (!block) {
+          if (partial.size >= 4096) invalidStream('exceeded the response block limit')
+          block = { text: '', index: partial.size, type: 'reasoning' }
+          partial.set(key, block)
+          yield { type: 'block-start', index: block.index, blockType: 'reasoning' }
+        }
+        // Done events can repeat an entire part. Emit only the new suffix.
+        if (display.startsWith(block.text) && display.length > block.text.length) {
+          const suffix = display.slice(block.text.length)
+          block.text = display
+          yield { type: 'reasoning-delta', index: block.index, text: suffix }
+        }
         break
       }
       case 'response.output_item.done': {
@@ -177,8 +251,7 @@ export async function* settleResponses(
           invalidStream('returned an invalid or duplicate reasoning item in response.output_item.done')
         }
         if (item.data.status === 'incomplete') break
-        const replay = reasoningReplay.safeParse(item.data)
-        if (replay.success) reasoningItems.set(event.output_index, replay.data)
+        reasoningItems.set(event.output_index, item.data)
         break
       }
       case 'response.failed':
@@ -198,11 +271,17 @@ export async function* settleResponses(
             invalidStream('returned reasoning output inconsistent with the completed stream item')
           }
         }
-        const blocks = outputBlocks(result.data.output, offered, historyCalls, reasoningItems)
+        for (const [index, summary] of summaries) {
+          const item = result.data.output[index]
+          if (item?.type !== 'reasoning' || (summary.id && summary.id !== item.id)) {
+            invalidStream('returned reasoning output inconsistent with the streamed summary')
+          }
+        }
+        const blocks = outputBlocks(result.data.output, offered, historyCalls, reasoningItems, summaries)
         const byKey = new Map(blocks.map(({ key, block }) => [key, block]))
         for (const [key, prefix] of partial) {
           const block = byKey.get(key)
-          if (block?.type !== 'text' || !block.text.startsWith(prefix.text)) {
+          if (prefix.type === 'text' && (block?.type !== 'text' || !block.text.startsWith(prefix.text))) {
             invalidStream('returned final text inconsistent with the streamed text')
           }
         }

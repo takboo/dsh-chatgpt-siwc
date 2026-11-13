@@ -52,6 +52,10 @@
 
 2026-11-13 的源码对照显示，Pi、Codex 和 OpenCode 都用服务端用量与本地估算结合判断上下文压力。OpenCode 在保留用户消息和工具结果结构的阶段把移除的图片转成文字。DSH 原生 DeepSeek adapter 走同一个图片计量接口，用户和工具的保留图片都实际发送，因此两者可以共用图片估算。[开源实现对照](siwc-image-token-estimation.md#开源实现对照)
 
+## 剩余目录字段
+
+2026-11-13 复核脱敏样本的 54 个字段。接入摘要参数后共采用 7 个字段。adapter 按所选模型的 `supports_reasoning_summary_parameter` 请求 `concise`，并借鉴同宿主实现处理摘要增量和终态。隔离 Desktop 上的 `gpt-6.1-sol` 在 `high` 和提供方默认下均先显示摘要，再显示正文。终态保持推理行数量，两组都通过同会话续聊。后续字段继续先核对同宿主和同路由开源实现。[Desktop 候选验收](../evidence/siwc-reasoning-summary-desktop-2026-11-13.md#流式摘要候选包验收) · [开源对照](responses-protocol-comparison.md#推理摘要的开源实现) · [其他字段](responses-protocol-comparison.md#图片接入后的剩余字段)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。

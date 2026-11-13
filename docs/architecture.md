@@ -68,6 +68,7 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - 模型目录声明 `image` 且宿主提供 `attachments` 时，adapter 才声明图片能力。DSH 保存并投影附件引用。adapter 通过 `readImageRequest` 读取用户图片，按图文顺序发送 `input_image`，使用 Base64 data URL 和 `detail: "auto"`。续聊按 DSH 保留的历史重新读取引用，工具结果里的图片使用文字占位，保留工具调用关联。
 - 整次请求的内联图片采用 20 MiB Base64 预算。超额通过 DSH 的 `IMAGE_OFFLOAD_REQUIRED` 交给宿主处理，已卸载图片沿用文字占位。附件读取失败在推理发出前报告 `INVALID_ATTACHMENT`。文件仍由 DSH 投影为 handle 文本。[Desktop 图片复测](evidence/siwc-image-desktop-2026-11-12.md)
 - 模型解析向 DSH 提供目录返回的 `context_window`，供宿主规划压缩与切换。缺失或无效时省略容量。标题和压缩摘要请求仍受辅助路由契约约束。[目录字段与取舍](research/responses-protocol-comparison.md#siwc-模型目录字段) · [辅助请求契约](research/dsh-contracts.md#主对话与辅助请求)
+- 所选模型的 `supports_reasoning_summary_parameter` 明确为 `true` 时，请求 `reasoning.summary: "concise"`。提供方默认请求省略 `effort`。
 - 每个模型的原生推理档位取账号目录的 `supported_reasoning_levels` 与 adapter 已知请求值的交集。选择器和出站校验共用此结果，显式档位作为每次请求顶层的 `reasoning.effort` 发送。同一会话切换档位时保留完整历史。「提供方默认」省略 `reasoning`。[档位实测](evidence/siwc-reasoning-desktop-2026-11-12.md)
 - 有 DSH `sessionId` 的主请求使用当前注册的指纹派生稳定的 `session-id` HTTP 头。相同注册和会话在令牌刷新后沿用同一头值。不同注册或会话分别派生，独立调用省略此头。缓存配置留在服务端。[请求回归](../test/p3/responses.test.mjs) · [Desktop 缓存记录](evidence/siwc-prompt-cache-desktop-2026-11-12.md)
 
@@ -79,6 +80,7 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - 无内容块的完成事件报告 `EMPTY_RESPONSE` 并保留已知用量。未完成 reasoning 项不能作为重放状态，后续失败终态仍负责结算。HTTP 和 SSE 的上下文溢出使用 DSH 的 `CONTEXT_WINDOW_EXCEEDED`，由宿主决定是否可压缩及重试。[协议回归](../test/p3/responses.test.mjs)
 - TokenUsage 映射 input/output/cache/reasoning，避免重复加总；缺失用量不伪装为已知零消耗。失败可能已计费；若宿主无法表示未知，则省略 usage 并记录非敏感诊断，不制造虚假精确值。订阅消耗不冒充已知美元价格。
 - 需要的 reasoning item／encrypted_content 与 call replay 以有界、版本化 ReplayEnvelope 保存；不存 token、ID token 或 OAuth 响应。恢复时只接受本 adapter 可验证的版本与身份绑定语义；不支持的 replay 明确降级／失败，不悄悄破坏工具关联。
+- 按输出项和摘要段索引将 `reasoning_summary` 事件转换为 DSH `reasoning-delta`。终态在同一块补齐展示文字，回放使用上游 reasoning item 和密文。取消前已展示、未取得回放数据的摘要留在界面，续聊时省略该摘要块。
 - 首轮回放在同一注册中读取已结算的加密 reasoning、assistant phase 与输出顺序。带加密推理的历史换注册时明确失败，纯文本历史可以继续投影。
 - `AbortSignal` 贯穿刷新、目录、推理、迭代和关闭；消费者提前停止也关闭上游。HMR／账号切换不得混入旧 token 或模型快照，卸载不影响其他 provider。
 - SDK 使用 `maxRetries:0` 与低层 `responses.create`。Agent loop 使用 DSH 默认有限重试策略，退避、会话日志及下一次 attempt 由 `dsh-llm-retry` 负责。直接 LLM 流保持单次发送。插件只在发送前完成有界的凭据有效化。

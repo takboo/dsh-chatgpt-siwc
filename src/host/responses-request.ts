@@ -80,7 +80,7 @@ async function prepareUserImages(options: GenerateOptions, signal: AbortSignal, 
 
 export async function prepareResponse(
   options: GenerateOptions, registration: string, effort: SiwcReasoningEffort | undefined,
-  signal: AbortSignal, readImage?: ReadRequestImage,
+  requestSummary: boolean, signal: AbortSignal, readImage?: ReadRequestImage,
 ) {
   const offered = new Map<string, string>()
   const tools: Responses.FunctionTool[] = []
@@ -143,7 +143,8 @@ export async function prepareResponse(
           }
           case 'reasoning':
             if (meta?.reasoning) input.push(meta.reasoning)
-            else if (message.source.provider === providerId) {
+            // A cancelled attempt can leave a visible summary without a sealed item.
+            else if (saved) {
               throw new LlmError('The stored reasoning has no supported replay state.', 'INVALID_REPLAY')
             }
             break
@@ -197,7 +198,8 @@ export async function prepareResponse(
       store: false,
       stream: true,
       include: ['reasoning.encrypted_content'],
-      ...(effort === undefined ? {} : { reasoning: { effort } }),
+      ...(requestSummary ? { reasoning: { effort, summary: 'concise' } as const }
+        : effort === undefined ? {} : { reasoning: { effort } }),
       ...(tools.length ? { tools: [{ type: 'namespace', name: toolNamespace, description: 'Local DeepSeek Harness tools', tools }] } : {}),
     } satisfies Responses.ResponseCreateParamsStreaming,
   }
