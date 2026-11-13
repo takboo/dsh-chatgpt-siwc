@@ -3,6 +3,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { createElement } from 'react'
 import { SettingsPanel, settingsLocale } from './client/settings.js'
@@ -41,5 +42,5 @@ export function apply(ctx: Context): void {
     name: 'plugins.bundle.config',
     key: packageName,
     locale: providerId,
-  }, ({ t }) => createElement(SettingsPanel, { t, command })))
+  }, ({ t }) => createElement(SettingsPanel, { t, command, forms: ctx.get('configForms') })))
 }

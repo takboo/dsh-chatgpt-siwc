@@ -106,7 +106,7 @@ export function fixture() {
   return { dependencies, state }
 }
 
-export async function harness(t, dependencies, backingPath) {
+export async function harness(t, dependencies, backingPath, { searchEnabled } = {}) {
   const directory = backingPath ? undefined : await mkdtemp(join(tmpdir(), 'siwc-p2-'))
   const path = backingPath ?? join(directory, 'credentials.yaml')
   const ctx = new Context()
@@ -123,7 +123,7 @@ export async function harness(t, dependencies, backingPath) {
   let accounts
   const plugin = ctx.plugin({
     inject: ['llm', 'authorization', 'credentials'],
-    apply(child) { accounts = attachAccounts(child, dependencies) },
+    apply(child) { accounts = attachAccounts(child, dependencies, searchEnabled) },
   })
   base.push(plugin)
   await plugin

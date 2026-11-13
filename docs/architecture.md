@@ -15,6 +15,7 @@ DSH agent / title / compaction
 
 DSH authorization → SIWC login module → credentials grant
 DSH model selector ← Adapter.listModels ← OpenAI models[]
+DSH web_search → ctx.web.search → ChatGPT search provider → SIWC Responses
 ```
 
 外部 interface 使用宿主已存在的 `LlmAdapter`，不再发明第二套聊天 interface。复杂 OAuth、协议转换与流终态封装在插件模块，模块内部可注入时钟、随机源、HTTP、credential store，支持确定性测试。
@@ -84,4 +85,10 @@ DSH model selector ← Adapter.listModels ← OpenAI models[]
 - 首轮回放在同一注册中读取已结算的加密 reasoning、assistant phase 与输出顺序。带加密推理的历史换注册时明确失败，纯文本历史可以继续投影。
 - `AbortSignal` 贯穿刷新、目录、推理、迭代和关闭；消费者提前停止也关闭上游。HMR／账号切换不得混入旧 token 或模型快照，卸载不影响其他 provider。
 - SDK 使用 `maxRetries:0` 与低层 `responses.create`。Agent loop 使用 DSH 默认有限重试策略，退避、会话日志及下一次 attempt 由 `dsh-llm-retry` 负责。直接 LLM 流保持单次发送。插件只在发送前完成有界的凭据有效化。
+
+## 6. 原生网页搜索
+
+- 联机插件通过 `ctx.web.registerSearchProvider` 注册 `chatgpt-siwc`，由插件设置启用，默认关闭。用户再用 DSH 的 `web.searchProvider` 选中它。插件详情页的选择按钮写入该字段，恢复按钮清除覆盖并重新继承 profile 的默认选择。DSH 的 `web_search` 继续负责工具准入、查询数量、超时、结果条数和卡片。`web_fetch` 使用其单独配置的提供方。[DSH 搜索提供方接口](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/web/web/src/index.ts#L98-L106)
+- 每个 `WebSearchRequest` 复用活动 SIWC 授权，选目录里首个明确支持搜索的可见模型。有 `low` 时使用该档。一次独立的 Responses 请求只携带搜索查询和顶层 `web_search`，不附带会话标识或对话历史。搜索失败交给原生工具错误路径，不转发到其他搜索提供方。
+- 按索引收集已完成输出项，核对成功终态，补齐其省略的流式项。把助手文字和安全的 HTTP(S) `url_citation` 返回给 DSH 原生搜索结果。DSH 将其渲染为来源链接，并把工具结果保存在调用方的对话会话中，供当前模型续聊。[Desktop 复测](evidence/siwc-native-search-desktop-2026-11-13.md)
 - 错误沿 DSH failure 接口返回稳定分类、HTTP 状态、符合格式的 request ID 和安全的 Retry-After。流校验失败保留可用的 HTTP 状态与请求 ID，错误消息使用固定文本或限定的协议字段名。

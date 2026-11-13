@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ConfigForms } from '@deepseek-ai/dsh-client-ui-settings/client'
+import { providerId } from '../identity.js'
 import type { SettingsAction, SettingsResult, SettingsView } from '../view.js'
 import { en, zh } from './locale.js'
 
@@ -33,7 +35,46 @@ const layout = {
 
 const statusTone = { connected: 'success', identityOnly: 'warning', signedOut: 'neutral', reauthorize: 'warning' } as const
 
-export function SettingsPanel({ t, command }: { t: Translate; command: Command }) {
+function SearchSettings({ t, forms, connected }: { t: Translate; forms: ConfigForms; connected: boolean }) {
+  const plugin = forms.get<{ enableChatGptSearch?: boolean }>(providerId)
+  const web = forms.get<{ searchProvider?: string }>('web')
+  const settings = useSyncExternalStore(listener => plugin.subscribe(listener), () => plugin.getSnapshot())
+  const selection = useSyncExternalStore(listener => web.subscribe(listener), () => web.getSnapshot())
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const enabled = settings.value?.enableChatGptSearch === true
+  const selected = selection.value?.searchProvider === providerId
+  if (settings.status !== 'ready' || selection.status !== 'ready') return null
+  const update = async (write: () => Promise<boolean>) => {
+    setBusy(true)
+    setFailed(false)
+    try { setFailed(!await write()) }
+    catch { setFailed(true) }
+    finally { setBusy(false) }
+  }
+  const toggle = async (next: boolean) => {
+    if (!next && selected && !await web.unset('searchProvider')) return false
+    return plugin.set('enableChatGptSearch', next)
+  }
+  return <div style={{ ...layout.list, ...layout.item }}>
+    <label style={layout.actions}>
+      <input type="checkbox" checked={enabled} disabled={busy || !settings.writable || (selected && !selection.writable)}
+        onChange={event => { const next = event.currentTarget.checked; void update(() => toggle(next)) }} />
+      {t('enableSearch')}
+    </label>
+    <p style={layout.note}>{t('searchHelp')}</p>
+    {enabled && <div style={layout.actions}>
+      <Button size="sm" variant="outline" disabled={busy || !selection.writable || (!selected && !connected)}
+        onClick={() => void update(() => selected ? web.unset('searchProvider') : web.set('searchProvider', providerId))}>
+        {t(selected ? 'restoreSearch' : 'selectSearch')}
+      </Button>
+      {selected && <Tag tone="success">{t('searchSelected')}</Tag>}
+    </div>}
+    {failed && <p role="alert" style={layout.note}>{t('searchSaveFailed')}</p>}
+  </div>
+}
+
+export function SettingsPanel({ t, command, forms }: { t: Translate; command: Command; forms?: ConfigForms }) {
   const [view, setView] = useState<SettingsView>()
   const [pending, setPending] = useState<SettingsAction['type'] | null>(null)
   const [notice, setNotice] = useState<{ message: TextKey; error: boolean }>()
@@ -133,6 +174,7 @@ export function SettingsPanel({ t, command }: { t: Translate; command: Command }
         </div>
         <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => void run({ type: 'reload' })}>{t('reload')}</Button>
       </div>}
+      {view?.available && forms && <SearchSettings t={t} forms={forms} connected={!!active} />}
       {view?.available && <div style={layout.actions}>
         {authorizing
           ? <Button variant="outline" onClick={() => void run({ type: 'cancel' })}>{t('cancel')}</Button>

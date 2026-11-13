@@ -17,6 +17,7 @@
 | W3、W6、L5 复测 | [SIWC 多图用量与默认压缩阈值](siwc-image-tokens-desktop-2026-11-13.md) |
 | W1、W2、W4、W6 探针 | [SIWC 推理摘要 Desktop 对照](siwc-reasoning-summary-desktop-2026-11-13.md) |
 | R1、W1、W4 探针 | [SIWC 托管搜索 Desktop 复测](siwc-hosted-search-desktop-2026-11-13.md) |
+| R4 复测 | [ChatGPT 原生搜索提供方 Desktop 验收](siwc-native-search-desktop-2026-11-13.md) |
 
 ## 记录模板
 

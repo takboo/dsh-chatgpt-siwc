@@ -46,6 +46,7 @@
 | R1 | 真实 eligible 账号、自身 app 登录与 catalog | 展示真实 app；实际 scope/resource 合格；模型目录属于当前 workspace，凭据不外泄 |
 | R2 | 真实文本→工具审批→执行→模型完成 | response.completed 与 DSH settlement 对应；至少一轮工具结果回传；真实订阅授权而非 API key 或旧 Codex 凭据 |
 | R3 | 实机 stop、token refresh、重启续接、logout | 分别记录结果。验证退出后插件停止使用旧授权，重登录复用已签发的 client ID 和原宿主 ID 并恢复访问。单列远端撤销结果。[复测流程](../test/README.md#真实账号复测) |
+| R4 | 原生 `web_search` 选择 ChatGPT 搜索 | 插件默认关闭。用插件界面选中 ChatGPT 后，DeepSeek 账号模型可搜索并显示原生可点击来源。同会话可用工具结果续聊。只调用选中的提供方，单列 DeepSeek 账号授权对原生搜索的影响。[Desktop 复测](evidence/siwc-native-search-desktop-2026-11-13.md) |
 
 ## 完成判定与阻断
 

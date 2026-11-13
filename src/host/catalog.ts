@@ -11,6 +11,7 @@ export interface CatalogModel extends ModelView {
   contextWindow?: number
   supportsImages?: true
   supportsReasoningSummary?: true
+  supportsSearch?: true
   reasoningEfforts?: readonly SiwcReasoningEffort[]
 }
 
@@ -22,6 +23,7 @@ const modelSchema = z.object({
   context_window: z.int().positive().optional().catch(undefined),
   input_modalities: z.array(z.string()).max(32).optional().catch(undefined),
   supports_reasoning_summary_parameter: z.boolean().optional().catch(undefined),
+  supports_search_tool: z.boolean().optional().catch(undefined),
   supported_reasoning_levels: z.array(z.object({ effort: z.string() }).optional().catch(undefined))
     .max(128).optional().catch(undefined),
 })
@@ -46,13 +48,15 @@ export async function fetchCatalog(api: OAuth, token: string, signal: AbortSigna
     const model = modelSchema.safeParse(value)
     if (model.success && !models.has(model.data.slug)) {
       const { slug, display_name: name, context_window: contextWindow, input_modalities: modalities,
-        supported_reasoning_levels: levels, supports_reasoning_summary_parameter: supportsSummary } = model.data
+        supported_reasoning_levels: levels, supports_reasoning_summary_parameter: supportsSummary,
+        supports_search_tool: supportsSearch } = model.data
       const advertised = new Set(levels?.map(level => level?.effort))
       const reasoningEfforts = knownReasoningEfforts.filter(effort => advertised.has(effort))
       models.set(slug, {
         id: slug, name, ...(contextWindow === undefined ? {} : { contextWindow }),
         ...(modalities?.includes('image') ? { supportsImages: true } : {}),
         ...(supportsSummary === true ? { supportsReasoningSummary: true } : {}),
+        ...(supportsSearch === true ? { supportsSearch: true } : {}),
         ...(reasoningEfforts.length === 0 ? {} : { reasoningEfforts }),
       })
     }

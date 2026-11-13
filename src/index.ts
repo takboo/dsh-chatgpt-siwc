@@ -1,14 +1,17 @@
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-authorization'
+import type {} from '@deepseek-ai/dsh-web'
 import { credentialKeyScope } from '@deepseek-ai/dsh-credentials'
 import { LlmAdapter, LlmError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import z from '@deepseek-ai/schemastery'
 import { planLabel, providerId } from './identity.js'
 import { Accounts } from './host/accounts.js'
 import type { CatalogModel } from './host/catalog.js'
 import { OAuth, SiwcFault } from './host/oauth.js'
 import type { OAuthDependencies } from './host/oauth.js'
 import { responses } from './host/responses.js'
+import { searchProvider } from './host/search.js'
 import { Settings } from './host/settings.js'
 import { localOAuth } from './host/system-browser.js'
 
@@ -98,19 +101,31 @@ class ChatGptAdapter extends LlmAdapter {
 }
 
 export interface Config {
-  enableLiveOAuth?: boolean
+  enableLiveOAuth?: unknown
+  enableChatGptSearch?: Volatile<boolean>
 }
+
+export const Config = z.object({
+  enableLiveOAuth: z.any(),
+  enableChatGptSearch: z.boolean().default(false).volatile(),
+})
 
 export function apply(ctx: Context, config?: Config): void {
-  attachAccounts(ctx, config?.enableLiveOAuth === true ? localOAuth() : undefined)
+  attachAccounts(ctx, config?.enableLiveOAuth === true ? localOAuth() : undefined,
+    () => config?.enableChatGptSearch?.get() === true)
 }
 
-export function attachAccounts(ctx: Context, dependencies?: OAuthDependencies): Accounts {
+export function attachAccounts(ctx: Context, dependencies?: OAuthDependencies, searchEnabled = () => false): Accounts {
   const profile = (ctx.get('profileContext') as { name?: string } | undefined)?.name ?? 'isolated'
   const notify = () => ctx.emit('llm/models-updated', providerId)
   const accounts = new Accounts(ctx.credentials, ctx.authorization, profile, notify,
     dependencies && new OAuth(dependencies))
   ctx.llm.registerAdapter([providerId], new ChatGptAdapter(accounts, () => ctx.get('attachments'), dependencies?.fetch))
+  if (dependencies) {
+    ctx.inject(['web'], child => {
+      child.effect(() => child.web.registerSearchProvider(searchProvider(accounts, dependencies.fetch, searchEnabled)))
+    })
+  }
   ctx.effect(() => () => accounts.dispose())
   ctx.on('credentials/record-updated', key => {
     if (key === accounts.selectionKey) accounts.invalidate()

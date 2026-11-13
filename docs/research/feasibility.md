@@ -60,6 +60,8 @@
 
 后续 Desktop 探针确认当前目录的 8 个可见模型都明确支持搜索。以 `gpt-6.1-sol` 实测，公开 SIWC 发出搜索调用与引用，使用流中的已完成项可在同一会话继续聊。搜索轮终态的 `output` 为空。后续若接入，需要处理流式搜索项与引用，保留已通过验收的续聊方式，并验证界面链接。[Desktop 托管搜索复测](../evidence/siwc-hosted-search-desktop-2026-11-13.md)
 
+2026-11-13 采用 DSH 原生搜索提供方方案。与直接在 ChatGPT 对话请求里声明托管工具相比，独立搜索请求可以为 DeepSeek 等其他对话模型服务。参考 Magpie 处理流中已完成的输出项，由 DSH 的 `web.searchProvider` 选择单一后端。插件默认关闭，启用后可在插件设置中选择 ChatGPT。原生工具负责结果显示和会话续聊。隔离 Desktop 验证 DeepSeek 账号模型使用 ChatGPT 搜索、点击来源和续聊，另验证该账号本身也可用于原生 DeepSeek 搜索。[Magpie 请求回归](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/provider/chatgpt_api_test.go#L349-L381) · [Magpie 空终态处理](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/gateway/codex_backend.go#L4325-L4382) · [Desktop 原生搜索验收](../evidence/siwc-native-search-desktop-2026-11-13.md)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。

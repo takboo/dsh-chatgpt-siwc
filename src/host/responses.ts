@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto'
 import { attributionHeaders, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, ProviderRequestId, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import OpenAI from 'openai'
+import type { Responses } from 'openai/resources/responses'
 import type { InferenceGrant } from './accounts.js'
 import type { SiwcReasoningEffort } from './catalog.js'
 import { resource, SiwcFault } from './oauth.js'
@@ -67,6 +68,19 @@ export async function* responses(
   if (options.reasoningEffort !== undefined && effort === undefined) {
     throw new LlmError('This reasoning effort is unavailable for the selected ChatGPT model.', 'UNSUPPORTED_REASONING_EFFORT')
   }
+  yield* streamResponse({ grant, fetch, signal: options.signal, sessionId: options.sessionId },
+    (registration, signal) => prepareResponse(options, registration, effort, requestSummary, signal, readImage),
+    (events, request, active, signal, failure, contentTypeDeclared) => settleResponses(events, request.offered,
+      request.historyCalls, active.registration, signal, active.assertCurrent, failure, contentTypeDeclared))
+}
+
+export async function* streamResponse<Request extends { body: Responses.ResponseCreateParamsStreaming }, Result>(
+  options: { grant?: InferenceGrant; fetch?: typeof globalThis.fetch; signal?: AbortSignal; sessionId?: string },
+  prepare: (registration: string, signal: AbortSignal) => Request | Promise<Request>,
+  settle: (events: AsyncIterable<Responses.ResponseStreamEvent>, request: Request, grant: InferenceGrant,
+    signal: AbortSignal, failure: (code?: string) => LlmError, contentTypeDeclared: boolean) => AsyncIterable<Result>,
+): AsyncGenerator<Result> {
+  const { grant, fetch } = options
   if (!fetch) throw new LlmError('ChatGPT inference is unavailable in this build.', 'SIWC_UNAVAILABLE')
   if (!grant) throw new LlmError('Connect a ChatGPT account with plan access before requesting inference.', 'AUTH')
   const operation = new AbortController()
@@ -76,7 +90,7 @@ export async function* responses(
   const signal = AbortSignal.any([operation.signal, deadline.signal, grant.signal, ...(options.signal ? [options.signal] : [])])
   let upstream: Response | undefined
   try {
-    const request = await prepareResponse(options, grant.registration, effort, requestSummary, signal, readImage)
+    const request = await prepare(grant.registration, signal)
     signal.throwIfAborted()
     const token = await grant.access(signal)
     const headers = attributionHeaders()
@@ -106,8 +120,8 @@ export async function* responses(
       await response.body?.cancel().catch(() => {})
       throw new LlmError('ChatGPT did not return a Responses event stream.', 'INVALID_RESPONSE')
     }
-    yield* settleResponses(data, request.offered, request.historyCalls, grant.registration, signal, grant.assertCurrent,
-      code => providerFailure(code, response.status, response.headers), contentType !== null)
+    yield* settle(data, request, grant, signal, code => providerFailure(code, response.status, response.headers),
+      contentType !== null)
   } catch (error) {
     if (deadline.signal.aborted || error instanceof OpenAI.APIConnectionTimeoutError) {
       throw new LlmError('The ChatGPT request timed out.', 'TIMEOUT')
