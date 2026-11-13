@@ -44,6 +44,14 @@
 
 2026-11-13 的 Desktop 复测中，8 个可见模型和 2 个隐藏条目均明确声明 `supports_parallel_tool_calls: true`。本轮保留现有请求行为，推理对照未触发。[Desktop 目录复测](../evidence/siwc-parallel-tools-desktop-2026-11-13.md) · [开源实现对照](responses-protocol-comparison.md#并行工具字段的开源实现)
 
+## 多图计量与压缩
+
+2026-11-13 的多图复测中，四张大图实际增加 11,060 输入 token，DSH 估算为 222。同会话在下一轮采用实际用量。离线在默认阈值附近确认，无用量锚点时低估会推迟压缩。本轮沿用 DSH 通用计量与默认压缩配置。[多图复测](../evidence/siwc-image-tokens-desktop-2026-11-13.md) · [计量研究](siwc-image-token-estimation.md)
+
+锁定版 DSH 的 `priceImages` 入参仅有图片块，宿主在收集计量输入时没有传递所属消息角色。逐角色估算需要原生接口补齐角色。当前附件序列化已经按角色处理，影响集中在缺少用量锚点时的压缩判定，以及工具结果内联预算。[计量接口与影响](siwc-image-token-estimation.md#实现门槛与范围)
+
+2026-11-13 的源码对照显示，Pi、Codex 和 OpenCode 都用服务端用量与本地估算结合判断上下文压力。OpenCode 在保留用户消息和工具结果结构的阶段把移除的图片转成文字。DSH 原生 DeepSeek adapter 走同一个图片计量接口，用户和工具的保留图片都实际发送，因此两者可以共用图片估算。[开源实现对照](siwc-image-token-estimation.md#开源实现对照)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。

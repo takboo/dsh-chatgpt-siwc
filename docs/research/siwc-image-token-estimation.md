@@ -1,0 +1,39 @@
+# SIWC 多图 token 估算与压缩研究
+
+2026-11-13。目标是确认图片 token 的估算偏差在什么情况下会改变 DSH 的自动压缩判定，再决定是否实现模型专用估算。首轮用已完成图片回放验收的 `gpt-6.1-sol`，固定 `low` 和 `detail: "auto"`。[Desktop 图片复测](../evidence/siwc-image-desktop-2026-11-12.md)
+
+首轮已完成。4 张 1,536 × 1,536 的图实测增加 11,060 输入 token，宿主引用估算为 222。普通同会话续聊随后复用实际用量，离默认压缩阈值仍远。离线复跑中，缺少用量锚点时，这一偏差能让接近 400,000 的合成历史错过当轮压缩。[实测与离线结果](../evidence/siwc-image-tokens-desktop-2026-11-13.md)
+
+本轮沿用 DSH 通用估算和默认压缩配置。下文记录复测方法及重新评估的条件。
+
+## 当前计量与判定
+
+- DSH `0.2.2-rc.1` 默认按图片引用的 JSON 长度估算。最近一次成功请求的 header 与当前一致，且实测用量足以作为锚点时，`TokenMeter.measure` 用该次输入加输出用量作基线，再加会话表面的估算增减量。输入包含缓存读写桶。切模型、更换请求 header 或缺可用用量锚点时，可能重新估算整个历史。[图片引用估算](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/token-meter/src/estimate.ts#L12-L34) · [用量求和](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/token-meter/src/index.ts#L56-L62) · [基线与增量](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/token-meter/src/index.ts#L130-L195)
+- 常规压力检查在 `agent/pre-step` 运行，此时这一轮新认领的用户消息尚未提交到会话。压缩读取的是检查时已有的历史。切模型走目标 header 的压力检查。阈值为 `floor(min(contextWindow × thresholdRatio, contextWindow − 输出预留 − headroomTokens))`。按锁定版默认值、500,000 窗口及 0 输出预留，参考值为 400,000。实测记录实际 preset、header、容量和阈值。[压力入口](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/compaction/compaction-basic/src/index.ts#L157-L194) · [消息提交时机](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/core/agent-loop/src/agent.ts#L452-L479) · [阈值公式](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/compaction/compaction-basic/src/config.ts#L172-L195)
+- OpenAI 公共视觉指南公开了 `gpt-6-astra` 和 GPT-5.6 家族的 patch 规则及 `auto` 行为。这份表里没有 `gpt-6.1-sol` 的对应规则。可用 `gpt-6-astra` 做有文档的交叉校验，`gpt-6.1-sol` 的候选规则以实测为准。[模型尺寸规则](https://developers.openai.com/api/docs/guides/images-vision#model-sizing-behavior) · [图像 token 计算](https://developers.openai.com/api/docs/guides/images-vision#patch-based-image-tokenization)
+
+## 验证步骤
+
+1. **测图片增加的输入用量。** 复用已签名的隔离 Desktop `0.2.2-rc.1` 和现有 SIWC 注册。生成低体积合成图，覆盖小方图、大方图、宽屏图。临时探针以独立请求固定模型、系统提示、用户文字和工具声明。各组使用同一个 `input_text` 数组形状，分别附上 0 张、1 张小方图、1 张大方图、1 张宽屏图、4 张同尺寸图，再留一组不同尺寸混合的图做独立验证。图片经原生附件服务生成实际出站版本，记录尺寸和 Base64 字节数。以 SIWC 终态原始 `usage.input_tokens` 减去纯文字组为图片增加的输入量，其中包含图像项的协议开销。另记缓存读写和输出用量。使用同一配置重复任何异常值或可能改变结论的组。[Responses 用量字段](https://developers.openai.com/api/reference/resources/responses/methods/create)
+2. **测同会话的估算。** 在一个真实会话里依次发纯文字、追加多图、只用文字续聊。临时探针记录每步压力检查读到的 `baseline.kind`、`baseline.tokens`、`surfaceDeltaTokens`、`totalTokens`、阈值和已提交的图片数。另在消息入账、请求发出前采样，并与该请求终态的用量对齐。区分同 header 可复用实测锚点、切模型或缺锚点需重算、图片已卸载三种情况。以图片在出站请求里实际出现的次数计数，并记录 `image/offload` 及压缩事件。只在同一逻辑时点、同一批已入账消息上比较计量，按 DSH 的输入加输出锚点口径复算压力。每个请求的输入增量对照仍单独用 `input_tokens`。
+3. **离线复跑压缩门槛。** 把脱敏用量、出站图片尺寸及会话顺序放入原生 DSH 回归 fixture。接入本地合成摘要 provider，使用原生 `TokenMeter` 和 `BasicCompaction`。对同一历史在阈值下、等于阈值、阈值上运行，核对是否触发压缩和实际触发轮次。再以真实 Desktop 读到的默认阈值计算偏差可能改变判定的区间。若真实样本和可信多图负载都远离该区间，保留现有估算。若复跑只在特意压低的测试阈值上翻转，记录接口能够改变判定，并保留默认阈值影响尚未证实的结论。[原生回归入口](../../test/p3/native-projection.test.mjs) · [判定与重测](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/compaction/compaction-basic/src/index.ts#L315-L356)
+
+记录同批图片的 DSH 估算增量、SIWC 实测输入增量、差值和相对阈值的余量。报告注明发生偏差的原因，包括估算规则、消息入账时点、图片卸载或锚点切换。真实请求使用原隔离账号，按复测约定保留授权。探针只输出尺寸、计数、用量和终态等脱敏数据。
+
+## 实现门槛与范围
+
+- 若有可复现的阈值影响，且候选规则在独立图片组合和多轮历史上能纠正判定，优先在 SIWC adapter 接入 DSH 已有的 `imageRequestPricing(provider, model)`。以已验证的精确模型、`detail` 和确定的出站尺寸计算视觉 token，计量同步且无 I/O。检查当前目录的能力与出站门控一致，模型规则或当前路由能力不明确时返回 `undefined`，由 DSH 继续估算。候选沿用 SIWC 终态用量的锚点语义、20 MiB 请求预算及宿主的压缩策略。[DSH 计量接口](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm/src/types.ts#L198-L227) · [DeepSeek adapter 示例](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-deepseek/src/request-pricing.ts#L76-L111)
+- 锁定版 `0.2.2-rc.1` 的 `priceImages` 只收到按顺序排列的 `ImageBlock[]`。`TokenMeter` 收集图片时省略消息角色。同一个附件引用出现在用户消息和工具结果里时，两种输入可产生相同的计量参数，SIWC 出站却分别使用视觉输入和文字占位。精确区分需要宿主为每个图片块传递所属消息的角色，并覆盖 `TokenMeter` 和 `spill-policy` 两处调用。若将所有图片按视觉 token 估算，工具结果可能被提前裁剪或落盘，混合历史也可能提前达到压缩阈值。若偏差只发生在新附图入账前，需另看宿主压力检查时机。[DSH 图片收集](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/token-meter/src/surface-fold.ts#L52-L94) · [工具结果计量](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/spill/spill-policy/src/index.ts#L57-L75) · [SIWC 图文转换](../../src/host/responses-request.ts#L153)
+- 候选版回归覆盖已验证及未知模型、原生图片和已卸载占位、工具图片、重复附件、实测用量锚点、阈值附近的原生压缩，以及实际出站尺寸与估算输入的一致性。用相同的 Desktop 矩阵复测候选，检查预测改善和新增的提前压缩情况，再决定是否交付。
+
+## 开源实现对照
+
+2026-11-13，核对以下固定提交的源码。
+
+- **Pi `275dde4`。** 压缩计量使用最近一次可用的模型用量，再估算之后的消息。缺用量时估算全部消息。用户和工具结果里的图片都按每张 1,200 token 粗估。Responses 对支持图片的模型可在工具结果中发送真正的 `input_image`。[实测基线](https://github.com/earendil-works/pi/blob/275dde410065080d291de45fbe2110272d10de23/packages/coding-agent/src/core/compaction/compaction.ts#L184-L223) · [图片估算](https://github.com/earendil-works/pi/blob/275dde410065080d291de45fbe2110272d10de23/packages/coding-agent/src/core/compaction/compaction.ts#L276-L335) · [工具图片转换](https://github.com/earendil-works/pi/blob/275dde410065080d291de45fbe2110272d10de23/packages/ai/src/api/openai-responses-shared.ts#L81-L110)
+- **Codex `c0cc9fc`。** 使用最近一次服务端用量和未计入部分的估算判断上下文压力。用户消息与工具结果的真实图片使用同一个估算函数。`auto` 等非 `original` 档位粗估约 1,844 token 每张，内联 `original` 在可读尺寸时按 32 像素 patch 估算。[用量基线](https://github.com/openai/codex/blob/c0cc9fc820f62e4dbdde68214dd6d792d6c8a7ee/codex-rs/core/src/context_manager/history.rs#L1158-L1182) · [图片估算](https://github.com/openai/codex/blob/c0cc9fc820f62e4dbdde68214dd6d792d6c8a7ee/codex-rs/core/src/context_manager/history.rs#L1326-L1367) · [工具结果估算](https://github.com/openai/codex/blob/c0cc9fc820f62e4dbdde68214dd6d792d6c8a7ee/codex-rs/core/src/context_manager/history.rs#L1585-L1609)
+- **OpenCode `611cee9`。** 估算前先按模型能力和图片字节预算处理待发送消息。用户媒体和工具结果仍保留各自结构，转成占位的图片按文字估算，留下的图片按 1,500 token 粗估。最近的同提供方用量可作为基线。源码注明图片预算在估算增量时只检查基线之后的图片，多图会话仍可能高估。[媒体转换](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/session/model-request.ts#L165-L244) · [估算与已知偏差](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/session/compaction.ts#L1129-L1155) · [内容估算](https://github.com/anomalyco/opencode/blob/611cee9d4b667b459f19ca0cbf6e76d8647535fb/packages/core/src/session/compaction.ts#L1250-L1274)
+- **Magpie `36eebea`。** 网关 trace 的输入拆分按每图 1,600 token 估算，收到提供方输入用量后按总量缩放各部分。对历史截图撑爆 HTTP 请求体的情况，网关学习上游的字节上限，将最旧图片替换为文字并保留最新用户附图。前者服务于 trace，后者处理传输体积。[图片常量](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/gateway/prompt.go#L76-L97) · [用量校准](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/gateway/prompt.go#L306-L343) · [字节上限](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/gateway/body_cap.go#L21-L49)
+- **DSH 原生 DeepSeek adapter `66491b0`。** 用户消息和工具结果走同一个图片编码器。保留图片按请求尺寸估视觉 token，卸载图片按占位文字估算。同一个 `priceImages` 接口在这条路由上无需区分图片来自哪个角色。[出站转换](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-deepseek/src/serialize.ts#L118-L125) · [图片估算](https://github.com/deepseek-ai/deepseek-harness/blob/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/llm/llm-deepseek/src/request-pricing.ts#L76-L111)
+
+对 SIWC 的推论是，按出站内容估算需要先知道每个块会成为视觉输入还是文字。OpenCode 的计量入口保留了这项信息，DSH 的 `priceImages` 只收到图片块。Pi、Codex 和 OpenCode 的每图估算值用于各自的上下文预算，`gpt-6.1-sol` 的 `auto` 规则仍以实测为准。
