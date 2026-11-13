@@ -40,6 +40,10 @@
 
 图片输入在 adapter 内复用 DSH 原生附件服务，按目录声明能力并将附件引用转换为 SIWC `input_image`。隔离 Desktop 上的 `gpt-6.1-sol` 通过真实账号首轮识图和同会话图片回放。[Desktop 图片复测](../evidence/siwc-image-desktop-2026-11-12.md)
 
+## 并行工具目录
+
+2026-11-13 的 Desktop 复测中，8 个可见模型和 2 个隐藏条目均明确声明 `supports_parallel_tool_calls: true`。本轮保留现有请求行为，推理对照未触发。[Desktop 目录复测](../evidence/siwc-parallel-tools-desktop-2026-11-13.md) · [开源实现对照](responses-protocol-comparison.md#并行工具字段的开源实现)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。
