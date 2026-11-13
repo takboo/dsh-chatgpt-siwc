@@ -19,6 +19,7 @@
 | R1、W1、W4 探针 | [SIWC 托管搜索 Desktop 复测](siwc-hosted-search-desktop-2026-11-13.md) |
 | R4 复测 | [ChatGPT 原生搜索提供方 Desktop 验收](siwc-native-search-desktop-2026-11-13.md) |
 | U1、R4、L5 Web 复测 | [ChatGPT 订阅界面与登录复用](siwc-ui-web-2026-11-13.md) |
+| P5 | [私有候选预检](siwc-p5-preflight-2026-11-13.md) |
 
 ## 记录模板
 

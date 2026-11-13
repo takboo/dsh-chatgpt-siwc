@@ -19,6 +19,7 @@
 | 核对宿主接口、辅助请求与 Client 扩展点 | [DSH 接口快照](research/dsh-contracts.md) |
 | 实施模型请求、登录、目录和生命周期 | [实施方案](architecture.md) · [源码布局](../src/README.md) |
 | 处理令牌、账号切换、登出、日志 | [安全设计](security.md) |
+| 安装、更新、排查与回退本地候选 | [本地安装与维护](local-install.md) |
 | 安排开发顺序与决策门 | [实施计划](implementation-plan.md) |
 | 设计测试、决定能否发布 | [验收标准](acceptance.md) |
 | 构建、复跑离线测试或进行 P4 交互验收 | [测试入口](../test/README.md) |

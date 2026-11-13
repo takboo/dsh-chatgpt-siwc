@@ -68,6 +68,10 @@
 
 本机既有注册的已验证 ID token 含 `name`，没有 `preferred_username` 或 `picture`。该结果适用于所查账号。界面优先使用令牌中可用的用户名，再用显示名称，首字头像由本地生成。账号注册 ID 可在更多菜单查看，模型选择器在 provider 分组标记 GPT 订阅。[SIWC 身份校验](https://developers.openai.com/siwc/token-sharing-open-source/sign-in#4-validate-the-id-token-and-chatgpt-plan-permission)
 
+## P5 发行边界
+
+2026-11-13 复核官方说明。开源及本地部署的应用可参考公开 SIWC 订阅调用流程，付费或远程托管应用另有申请入口。现有通过记录只覆盖已测账号与宿主。公开发行的插件身份、图标用法与渠道仍待确认。[SIWC 概览](https://developers.openai.com/siwc/token-sharing-open-source) · [OpenAI 品牌指南](https://openai.com/brand/) · [P5 预检](../evidence/siwc-p5-preflight-2026-11-13.md)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。
