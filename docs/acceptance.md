@@ -41,7 +41,7 @@
 |---|---|---|
 | L5 | 本地 Web 与官方 Desktop 各自在隔离 profile 安装并运行 | 模型可选可提交，模型切换与重启恢复可观察。记录有无 context 时的行为，注明标题和手动、自动压缩使用的配置。报告实际载体、版本与限制 |
 | B1 | 与原 OpenAI/DeepSeek provider 共存、重名、禁用／卸载 | 无 registry 覆写；冲突清楚；其他 provider 前后均可用；重启生效状态准确 |
-| U1 | 两个宿主的插件详情设置、官方 UX 与多个保存注册 | 插件管理页的对应详情可进入设置。Continue with ChatGPT、首次 plan 确认、Using ChatGPT plan、Manage usage 和限额指引可观察。同 email 的不同 client 保持独立。新注册通过验证且有推理权限后才能成为活动注册 |
+| U1 | 两个宿主的插件详情设置、官方 UX 与多个保存注册 | 插件详情可登录、确认、切换和退出。账号行显示可用的用户名或显示名称及首字头像，在更多菜单查看注册 ID。同 email 的不同 client 保持独立。模型菜单以分组标注订阅。选中订阅模型时，模型选择器左边有官方用量入口，限额错误也提供用量入口。网页搜索单行设置支持悬停、键盘和点击查看说明。新注册通过验证且有推理权限后才能成为活动注册 |
 | B2 | 实际 packed bundle 与语言资源 | 相同包摘要贯穿 pack/install；入口/patch/locales/icon 齐全；中文／英文无模板 fallback |
 | R1 | 真实 eligible 账号、自身 app 登录与 catalog | 展示真实 app；实际 scope/resource 合格；模型目录属于当前 workspace，凭据不外泄 |
 | R2 | 真实文本→工具审批→执行→模型完成 | response.completed 与 DSH settlement 对应；至少一轮工具结果回传；真实订阅授权而非 API key 或旧 Codex 凭据 |

@@ -10,6 +10,7 @@ const accountRecordKey = (id) => credentialKey('chatgpt-siwc', 'account-' + id)
 test('DSH authorization performs verified first login, reauthorization and native catalog publication', async (t) => {
   const { dependencies, state } = fixture()
   state.replay = true
+  state.idClaims = { name: 'Fixture Person', preferred_username: 'fixture-user' }
   const { accounts, ctx } = await harness(t, dependencies)
   const events = []
   ctx.on('llm/models-updated', provider => { events.push(provider) })
@@ -31,11 +32,12 @@ test('DSH authorization performs verified first login, reauthorization and nativ
   const before = await accounts.view()
   assert.equal(before.active, before.accounts[0].id)
   assert.equal(before.confirmPlan, true)
+  assert.equal(before.accounts[0].displayName, 'fixture-user')
+  assert.doesNotMatch(JSON.stringify(before.accounts), /@|•••/)
   await accounts.confirm()
   const catalog = await ctx.llm.listModels('chatgpt-siwc')
-  assert.deepEqual(catalog.map(model => model.badge), catalog.map(() => ({
-    text: { en: 'Using ChatGPT plan', zh: '正在使用 ChatGPT 订阅' }, tone: 'success',
-  })))
+  assert.equal(ctx.llm.listProviders().find(provider => provider.id === 'chatgpt-siwc').name, 'GPT 订阅')
+  assert.ok(catalog.every(model => model.badge === undefined))
   assert.deepEqual(catalog.map(({ id, name }) => ({ id, name })), [
     { id: 'fixture-z', name: 'Fixture Z' }, { id: 'fixture-a', name: 'Fixture A' },
   ])

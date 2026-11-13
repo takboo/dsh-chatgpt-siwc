@@ -64,7 +64,7 @@ bash "$base/scripts/run-container.sh" cli test/p2/host-targets.json \
 
 按 [P1 包骨架](#p1-包骨架)安装锁定依赖。在根目录构建后运行 `node --test --test-timeout=15000 test/p2/*.test.mjs`，核对 loopback、合成签名、实际本地 backing、DSH Typert 和目录。替身传输只接受测试中的固定端点。
 
-设置页的浏览器 fixture 使用同一份构建和锁定 DSH 源码中的 Button、Tag 与主题 token。准备下方配置检查所用的 DSH 源码，赋值给 `dsh_source`，再从根目录执行：
+设置页的浏览器 fixture 使用同一份构建和锁定 DSH 源码中的原生控件与主题 token。准备下方配置检查所用的 DSH 源码，赋值给 `dsh_source`，再从根目录执行：
 
 ```sh
 p2_ui_dir=$(mktemp -d)

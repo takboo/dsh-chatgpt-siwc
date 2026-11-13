@@ -38,7 +38,7 @@ DSH web_search → ctx.web.search → ChatGPT search provider → SIWC Responses
 - `listModels` 与 `resolveModel` 提供目录和路由信息。目录保留 `visibility == "list"` 项及服务器顺序，UI 用 `display_name`、请求用 `slug`。目录变化通过 `llm/models-updated` 发布。后续接入可编辑目录时，先落实 settings namespace 契约。
 - 模型发现与 GUI 的公开读取只返回元数据／状态，不返回 OAuth token；特权请求留在 Host。
 - 若缺失 hard dependency，插件明确 inactive 或加载失败；不绕过 Service 自行寻找宿主私有文件。
-- 插件管理页用 `plugins.bundle.config` 按包名注册设置。账号操作经 owner-only Typert 调用，Client 读取脱敏状态。P2 的 Chromium fixture 覆盖 Continue with ChatGPT、活动账号、首次确认、目录和用量指引。模型目录通过 `LlmModelInfo.badge` 向 Composer 提供套餐徽标，与插件设置共用中英文文案。[接口快照](research/dsh-contracts.md#client-公开扩展) · [SIWC UX](https://developers.openai.com/siwc/ui-ux-guidelines.md)
+- 插件管理页用 `plugins.bundle.config` 按包名注册设置。账号操作经 owner-only Typert 调用。模型目录在 provider 分组显示 GPT 订阅标识。客户端通过 `conversation.input.right` 在当前选中 ChatGPT 模型时显示官方用量入口。[接口快照](research/dsh-contracts.md#client-公开扩展) · [SIWC UX](https://developers.openai.com/siwc/ui-ux-guidelines.md)
 
 ## 3. OAuth 与 grant 生命周期
 

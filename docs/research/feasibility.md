@@ -62,6 +62,12 @@
 
 2026-11-13 采用 DSH 原生搜索提供方方案。与直接在 ChatGPT 对话请求里声明托管工具相比，独立搜索请求可以为 DeepSeek 等其他对话模型服务。参考 Magpie 处理流中已完成的输出项，由 DSH 的 `web.searchProvider` 选择单一后端。插件默认关闭，启用后可在插件设置中选择 ChatGPT。原生工具负责结果显示和会话续聊。隔离 Desktop 验证 DeepSeek 账号模型使用 ChatGPT 搜索、点击来源和续聊，另验证该账号本身也可用于原生 DeepSeek 搜索。[Magpie 请求回归](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/provider/chatgpt_api_test.go#L349-L381) · [Magpie 空终态处理](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/gateway/codex_backend.go#L4325-L4382) · [Desktop 原生搜索验收](../evidence/siwc-native-search-desktop-2026-11-13.md)
 
+## 账号与额度展示
+
+2026-11-13 核对公开 SIWC。官方账号文档将用量管理指向 ChatGPT 设置，公开推理文档约定限额错误及恢复方式。Magpie 的公开 `chatgpt-api` 返回空额度窗口和官方用量链接。同宿主 `dsh-codex-subscription` 通过 Codex 登录访问 `backend-api/wham/usage` 并读取 `used_percent`，使用另一条授权与服务路径。当前插件在 ChatGPT 模型的选择器旁和实际限额提示中提供官方用量入口。账号行省略额度占位。[SIWC 用量管理](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions#tracking-usage) · [SIWC 限额错误](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery#structured-responses-errors) · [Magpie 公开 SIWC 用量](https://github.com/yetone/magpie/blob/36eebea13675cfafbb79de573f533ed0e7b8f4af/internal/provider/login_usage.go#L405-L411) · [同宿主 Codex 用量](https://github.com/WSL043/dsh-codex-subscription/blob/03f3170dfca10f12499f4a0e43d6b62b4dc44b68/src/usage.js#L8-L29)
+
+本机既有注册的已验证 ID token 含 `name`，没有 `preferred_username` 或 `picture`。该结果适用于所查账号。界面优先使用令牌中可用的用户名，再用显示名称，首字头像由本地生成。账号注册 ID 可在更多菜单查看，模型选择器在 provider 分组标记 GPT 订阅。[SIWC 身份校验](https://developers.openai.com/siwc/token-sharing-open-source/sign-in#4-validate-the-id-token-and-chatgpt-plan-permission)
+
 ## 选择与取舍
 
 1. 使用自身真实应用名称和稳定 host ID，走 dynamic registration；不借用 Codex、Hermes 或其他应用身份。

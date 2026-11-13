@@ -5,7 +5,7 @@ import { credentialKeyScope } from '@deepseek-ai/dsh-credentials'
 import { LlmAdapter, LlmError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import z from '@deepseek-ai/schemastery'
-import { planLabel, providerId } from './identity.js'
+import { providerId } from './identity.js'
 import { Accounts } from './host/accounts.js'
 import type { CatalogModel } from './host/catalog.js'
 import { OAuth, SiwcFault } from './host/oauth.js'
@@ -28,7 +28,7 @@ class ChatGptAdapter extends LlmAdapter {
   }
 
   override providerInfo(provider: string) {
-    return { id: provider, name: 'ChatGPT' }
+    return { id: provider, name: 'GPT 订阅' }
   }
 
   override async listModels(): Promise<LlmModelInfo[]> {
@@ -37,7 +37,6 @@ class ChatGptAdapter extends LlmAdapter {
       const hasAttachments = this.attachments() !== undefined
       return models.map(({ id, name, supportsImages }) => ({
         id, name, provider: providerId, inputModalities: supportsImages && hasAttachments ? ['text', 'image'] : ['text'],
-        badge: { text: planLabel, tone: 'success' },
       }))
     } catch {
       // The settings view offers the explicit retry and the safe error detail.

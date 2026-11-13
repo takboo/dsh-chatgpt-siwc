@@ -14,7 +14,7 @@ export const resultSchema = z.discriminatedUnion('ok', [
       authorizing: z.boolean(),
       accounts: z.array(z.strictObject({
         id: z.uuid(),
-        label: z.string(),
+        displayName: z.optional(z.string()),
         status: z.enum(['connected', 'identityOnly', 'signedOut', 'reauthorize']),
       })),
       active: z.nullable(z.uuid()),

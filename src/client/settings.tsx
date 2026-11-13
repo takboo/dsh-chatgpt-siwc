@@ -1,39 +1,76 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button, IconCheckOutlineRegular, IconEllipsisOutlineRegular, IconGlobeOutlineRegular,
+  IconInfoOutlineRegular, IconPlusOutlineRegular, Menu, Switch, Tag, Tooltip,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConfigForms } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { providerId } from '../identity.js'
-import type { SettingsAction, SettingsResult, SettingsView } from '../view.js'
+import type { AccountView, SettingsAction, SettingsResult, SettingsView } from '../view.js'
 import { en, zh } from './locale.js'
+import type { TextKey, Translate } from './locale.js'
+import { UsageLink } from './usage.js'
 
-type TextKey = keyof typeof en
-export type Translate = (key: TextKey) => string
 type Command = (action: SettingsAction) => Promise<SettingsResult>
 
 const layout = {
   panel: {
-    display: 'grid', gap: 14, borderRadius: 'var(--dsw-radius-md, 12px)', padding: 14,
-    border: '1px solid var(--dsw-alias-settings-card-stroke, #d8dddb)',
-    borderInlineStart: '3px solid light-dark(#387e6f, #78bca9)',
-    background: 'var(--dsw-alias-settings-card-fill, transparent)',
+    display: 'grid',
     color: 'var(--dsw-alias-label-primary, inherit)',
   },
   row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
-  actions: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  actions: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   note: { margin: 0, color: 'var(--dsw-alias-label-secondary, inherit)', fontSize: 13, lineHeight: 1.5 },
-  list: { display: 'grid', gap: 8, margin: 0, padding: 0, listStyle: 'none' },
-  item: { borderTop: '1px solid var(--dsw-alias-border-l3, #d8dddb)', paddingTop: 8 },
+  list: { margin: 0, padding: 0, listStyle: 'none' },
+  item: { borderBlockStart: '1px solid var(--dsw-alias-border-l3, #d8dddb)', paddingBlock: 8, minHeight: 48, boxSizing: 'border-box' },
   heading: { margin: 0, fontWeight: 600, fontSize: 14 },
-  wrap: { overflowWrap: 'anywhere' },
-  limitEdge: { borderInlineStartColor: 'light-dark(#a5640e, #efb363)' },
-  primaryLink: {
-    display: 'inline-flex', alignItems: 'center', minHeight: 36, paddingInline: 14,
-    borderRadius: 'var(--dsw-radius-md, 12px)', textDecoration: 'none',
-    color: 'var(--dsw-alias-label-primary-foreground, white)',
-    background: 'var(--dsw-alias-button-primary-fill, #123a43)',
+  avatar: {
+    display: 'inline-grid', placeItems: 'center', flex: 'none', width: 32, height: 32, borderRadius: '50%',
+    background: 'light-dark(#e3efeb, #28423d)', color: 'light-dark(#23574d, #b9ddd3)', fontSize: 12, fontWeight: 600,
   },
 } as const
 
-const statusTone = { connected: 'success', identityOnly: 'warning', signedOut: 'neutral', reauthorize: 'warning' } as const
+const statusTone = { identityOnly: 'warning', signedOut: 'neutral', reauthorize: 'warning' } as const
+
+function AccountRow({ account, t, active, canEdit, available, run }: {
+  account: AccountView; t: Translate; active: boolean; canEdit: boolean; available: boolean
+  run: (action: SettingsAction) => Promise<void>
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const name = account.displayName ?? t('unnamedAccount')
+  const initial = Array.from(name)[0]?.toLocaleUpperCase()
+  const connected = account.status === 'connected'
+  return <li style={{ ...layout.item, ...layout.row, flexWrap: 'nowrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <span aria-hidden="true" style={layout.avatar}>{initial}</span>
+      <div style={{ ...layout.actions, minWidth: 0 }}>
+        <span style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{name}</span>
+        {active && connected && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap',
+          fontSize: 11, color: 'var(--dsw-alias-state-success-primary)' }}>
+          <IconCheckOutlineRegular size={12} />{t('active')}
+        </span>}
+        {account.status !== 'connected' && <Tag tone={statusTone[account.status]}>{t(account.status)}</Tag>}
+      </div>
+    </div>
+    <div style={{ ...layout.actions, flexWrap: 'nowrap', flexShrink: 0 }}>
+      {available && connected && !active &&
+        <Button size="sm" disabled={!canEdit} onClick={() => void run({ type: 'activate', id: account.id })}>{t('activate')}</Button>}
+      {available && !connected &&
+        <Button size="sm" disabled={!canEdit} onClick={() => void run({ type: 'login', id: account.id })}>{t('reauthenticate')}</Button>}
+      <Menu open={menuOpen} onClose={() => setMenuOpen(false)} align="end" portal compact
+        anchor={<Button type="button" size="sm" aria-haspopup="menu" aria-expanded={menuOpen}
+          aria-label={`${t('accountActions')} · ${name}`} onClick={() => setMenuOpen(open => !open)}
+          icon={<IconEllipsisOutlineRegular size={16} />} />}
+        items={[
+          { type: 'label', id: 'registration-label', text: t('accountId') },
+          { type: 'label', id: 'registration-id', text: account.id },
+          ...(available && account.status !== 'signedOut'
+            ? [{ id: 'logout', label: t('logout'), disabled: !canEdit, danger: true }] : []),
+        ]}
+        onSelect={item => { if (item === 'logout') void run({ type: 'logout', id: account.id }) }}
+      />
+    </div>
+  </li>
+}
 
 function SearchSettings({ t, forms, connected }: { t: Translate; forms: ConfigForms; connected: boolean }) {
   const plugin = forms.get<{ enableChatGptSearch?: boolean }>(providerId)
@@ -56,21 +93,26 @@ function SearchSettings({ t, forms, connected }: { t: Translate; forms: ConfigFo
     if (!next && selected && !await web.unset('searchProvider')) return false
     return plugin.set('enableChatGptSearch', next)
   }
-  return <div style={{ ...layout.list, ...layout.item }}>
-    <label style={layout.actions}>
-      <input type="checkbox" checked={enabled} disabled={busy || !settings.writable || (selected && !selection.writable)}
-        onChange={event => { const next = event.currentTarget.checked; void update(() => toggle(next)) }} />
-      {t('enableSearch')}
-    </label>
-    <p style={layout.note}>{t('searchHelp')}</p>
-    {enabled && <div style={layout.actions}>
-      <Button size="sm" variant="outline" disabled={busy || !selection.writable || (!selected && !connected)}
+  return <div style={{ ...layout.row, ...layout.item }}>
+    <div style={{ ...layout.actions, flexWrap: 'nowrap', fontSize: 13 }}>
+      <span style={layout.note}><IconGlobeOutlineRegular size={16} /></span>
+      <span>{t('enableSearch')}</span>
+      <Tooltip label={t('searchHelp')} side="top" delayMs={250} maxWidth={310} portal openOnClick>
+        <Button type="button" size="sm" aria-label={t('searchHelpLabel')}
+          style={{ paddingInline: 4, color: 'var(--dsw-alias-label-secondary)' }}
+          icon={<IconInfoOutlineRegular size={14} />} />
+      </Tooltip>
+    </div>
+    <div style={{ ...layout.actions, marginInlineStart: 'auto' }}>
+      {enabled && selected && <span style={{ ...layout.note, fontSize: 11 }}>{t('searchSelected')}</span>}
+      {enabled && <Button size="sm" disabled={busy || !selection.writable || (!selected && !connected)}
         onClick={() => void update(() => selected ? web.unset('searchProvider') : web.set('searchProvider', providerId))}>
         {t(selected ? 'restoreSearch' : 'selectSearch')}
-      </Button>
-      {selected && <Tag tone="success">{t('searchSelected')}</Tag>}
-    </div>}
-    {failed && <p role="alert" style={layout.note}>{t('searchSaveFailed')}</p>}
+      </Button>}
+      <Switch label={t('enableSearch')} checked={enabled} disabled={busy || !settings.writable || (selected && !selection.writable)}
+        onChange={next => { void update(() => toggle(next)) }} />
+    </div>
+    {failed && <p role="alert" style={{ ...layout.note, flexBasis: '100%' }}>{t('searchSaveFailed')}</p>}
   </div>
 }
 
@@ -119,69 +161,35 @@ export function SettingsPanel({ t, command, forms }: { t: Translate; command: Co
   const authorizing = view?.authorizing || pending === 'login'
   const canEdit = pending === null
   const quota = notice?.message === 'error_quota'
-  const showUsage = active || quota || notice?.message === 'unconfirmed'
 
   return (
-    <section aria-label={t('account')} style={quota ? { ...layout.panel, ...layout.limitEdge } : layout.panel}>
-      <div style={layout.row}>
+    <section aria-label={t('account')} style={layout.panel}>
+      <div style={{ ...layout.row, paddingBlockEnd: 6 }}>
         <h2 style={layout.heading}>{t('account')}</h2>
-        {active && <Tag tone="success">{t('usingPlan')}</Tag>}
+        {view?.available && (authorizing
+          ? <Button size="sm" variant="outline" onClick={() => void run({ type: 'cancel' })}>{t('cancel')}</Button>
+          : <Button size="sm" variant={view.accounts.length ? 'outline' : 'primary'} disabled={!canEdit}
+            icon={view.accounts.length ? <IconPlusOutlineRegular size={14} /> : undefined}
+            onClick={() => void run({ type: 'login' })}>
+            {t(view.accounts.length ? 'addAccount' : 'signIn')}
+          </Button>)}
       </div>
       {!view && pending && <p role="status" style={layout.note}>{t('loading')}</p>}
       {view && !view.available && <p style={layout.note}>{t('offline')}</p>}
       {view?.available && !active && view.accounts.length === 0 && <p style={layout.note}>{t('emptyAccounts')}</p>}
-      {notice && !quota && <p role={notice.error ? 'alert' : 'status'} style={layout.note}>{t(notice.message)}</p>}
+      {notice && <div role={notice.error ? 'alert' : 'status'} style={{ ...layout.actions, ...layout.note }}>
+        {t(notice.message)}
+        {quota && <UsageLink t={t} />}
+      </div>}
       {view?.accounts.length ? <ul style={layout.list} aria-label={t('savedAccounts')}>
-        {view.accounts.map(account => <li key={account.id} style={{ ...layout.row, ...layout.item }}>
-          <div style={layout.actions}>
-            <strong style={layout.wrap}>{account.label}</strong>
-            <Tag tone={account.id === view.active ? 'success' : statusTone[account.status]}>
-              {t(account.id === view.active ? 'active' : account.status)}
-            </Tag>
-          </div>
-          {view.available && <div style={layout.actions}>
-            {account.id !== view.active && account.status === 'connected' &&
-              <Button size="sm" disabled={!canEdit} onClick={() => void run({ type: 'activate', id: account.id })}>{t('activate')}</Button>}
-            {(account.status === 'signedOut' || account.status === 'reauthorize' || account.status === 'identityOnly') &&
-              <Button size="sm" disabled={!canEdit} onClick={() => void run({ type: 'login', id: account.id })}>{t('reauthenticate')}</Button>}
-            {account.status !== 'signedOut' &&
-              <Button size="sm" disabled={!canEdit} onClick={() => void run({ type: 'logout', id: account.id })}>{t('logout')}</Button>}
-          </div>}
-        </li>)}
+        {view.accounts.map(account => <AccountRow key={account.id} account={account} t={t}
+          active={account.id === view.active} canEdit={canEdit} available={view.available} run={run} />)}
       </ul> : null}
       {view?.confirmPlan && <div style={layout.row}>
         <p style={layout.note}>{t('planConfirmation')}</p>
         <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => void run({ type: 'confirm' })}>{t('confirm')}</Button>
       </div>}
-      {showUsage && <div style={{ ...layout.row, ...layout.item }}>
-        <div>
-          <h3 style={layout.heading}>{t('usage')}</h3>
-          {quota && <p role="alert" style={layout.note}>{t('error_quota')}</p>}
-        </div>
-        <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer" style={quota ? layout.primaryLink : undefined}>{t('manage')}</a>
-      </div>}
-      {active && <div style={{ ...layout.row, ...layout.item }}>
-        <div>
-          <h3 style={layout.heading}>{t('models')}</h3>
-          {quota ? null : view?.models?.length ? (
-            <details style={layout.note}>
-              <summary>{t('modelCount').replace('{count}', String(view.models.length))}</summary>
-              <ul style={{ ...layout.list, maxHeight: 160, overflowY: 'auto', marginBlockStart: 6 }}>
-                {view.models.map(model => <li key={model.id} style={layout.wrap}>{model.name}</li>)}
-              </ul>
-            </details>
-          ) : <p style={layout.note}>{view?.models === null ? t('loadModels') : t('emptyModels')}</p>}
-        </div>
-        <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => void run({ type: 'reload' })}>{t('reload')}</Button>
-      </div>}
       {view?.available && forms && <SearchSettings t={t} forms={forms} connected={!!active} />}
-      {view?.available && <div style={layout.actions}>
-        {authorizing
-          ? <Button variant="outline" onClick={() => void run({ type: 'cancel' })}>{t('cancel')}</Button>
-          : view?.available && <Button variant={view.accounts.length ? 'ghost' : 'primary'} disabled={!canEdit} onClick={() => void run({ type: 'login' })}>
-            {t(view.accounts.length ? 'addAccount' : 'signIn')}
-          </Button>}
-      </div>}
     </section>
   )
 }

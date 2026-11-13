@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { createLocalJWKSet, jwtVerify } from 'jose'
+import { createLocalJWKSet, decodeJwt, jwtVerify } from 'jose'
 import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { z } from 'zod'
 import { listenForCallback } from './loopback.js'
@@ -32,7 +32,7 @@ export class RetryRegistration extends SiwcFault {
 export const identitySchema = z.object({
   clientId: z.string().regex(/^oaiapp_[a-zA-Z0-9_-]{1,200}$/),
   subject: z.string().min(1).max(512),
-  label: z.string().min(1).max(100).optional(),
+  displayName: z.string().min(1).max(100).optional(),
 })
 export const tokenSchema = z.object({
   access: z.string().min(1).max(32_768),
@@ -44,6 +44,28 @@ export const tokenSchema = z.object({
 })
 export type Identity = z.infer<typeof identitySchema>
 export type Tokens = z.infer<typeof tokenSchema>
+
+function displayName(claims: JWTPayload): string | undefined {
+  for (const claim of [claims.preferred_username, claims.name]) {
+    if (typeof claim !== 'string') continue
+    const name = claim.trim()
+    if (name && name.length <= 100 && !/[@\p{Cc}\p{Cf}]/u.test(name)) return name
+  }
+}
+
+export function accountDisplayName(identity: Identity, tokens?: Tokens): string | undefined {
+  if (identity.displayName || !tokens) return identity.displayName
+  // Older records already hold an ID token validated when the credentials were written.
+  try {
+    const claims = decodeJwt(tokens.idToken)
+    if (claims.iss === issuer && claims.sub === identity.subject &&
+      (claims.aud === identity.clientId || (Array.isArray(claims.aud) && claims.aud.length === 1 && claims.aud[0] === identity.clientId))) {
+      return displayName(claims)
+    }
+  } catch {
+    return undefined
+  }
+}
 
 const wireTokens = z.object({
   access_token: tokenSchema.shape.access,
@@ -273,11 +295,8 @@ export class OAuth {
         if (!wire.id_token) throw new SiwcFault('identity')
         const id = await this.claims(wire.id_token, result.clientId, keys)
         if (id.nonce !== nonce || (previous && id.sub !== previous.identity.subject)) throw new SiwcFault('identity')
-        const email = typeof id.email === 'string' && id.email_verified === true
-          ? /^([^\s@])[^\s@]*(@[^\s@]{1,96})$/.exec(id.email)
-          : null
-        const label = email ? email[1] + '•••' + email[2] : undefined
-        const identity = { clientId: result.clientId, subject: id.sub, ...(label ? { label } : {}) }
+        const name = displayName(id) ?? previous?.identity.displayName
+        const identity = { clientId: result.clientId, subject: id.sub, ...(name ? { displayName: name } : {}) }
         const tokens = await this.tokens(wire, identity, keys)
         attempt.throwIfAborted()
         return { identity, tokens }

@@ -18,6 +18,13 @@ await build({
       import { createRoot } from 'react-dom/client'
       import { Button } from ${JSON.stringify(join(upstream, 'ui-primitives/src/Button.tsx'))}
       import { Tag } from ${JSON.stringify(join(upstream, 'ui-primitives/src/Tag.tsx'))}
+      import { Menu } from ${JSON.stringify(join(upstream, 'ui-primitives/src/Menu.tsx'))}
+      import { Switch } from ${JSON.stringify(join(upstream, 'ui-primitives/src/Switch.tsx'))}
+      import { Tooltip } from ${JSON.stringify(join(upstream, 'ui-primitives/src/Tooltip.tsx'))}
+      import {
+        IconCheckOutlineRegular, IconEllipsisOutlineRegular, IconGlobeOutlineRegular,
+        IconInfoOutlineRegular, IconPlusOutlineRegular,
+      } from ${JSON.stringify(join(upstream, 'ui-primitives/src/icons/index.tsx'))}
       import ${JSON.stringify(join(upstream, 'ui-theme/src/styles/base.css'))}
       import ${JSON.stringify(join(upstream, 'ui-theme/src/styles/design-platform.css'))}
 
@@ -31,10 +38,15 @@ await build({
       document.documentElement.lang = lang
       document.getElementById('heading').textContent = lang === 'zh' ? 'ChatGPT 订阅' : 'ChatGPT Plan'
       const id = 'c149080e-6cf5-4ccc-a571-65fa173d35f5'
-      const accounts = [{ id, label: 'j•••@example.invalid · c14908', status: 'connected' }]
+      const accounts = [{ id, displayName: 'Jules Fixture', status: 'connected' }]
       let view = { available, authorizing: false, accounts: [], active: null, confirmPlan: false, models: null }
       let dictionaries
       let panel
+      const form = value => {
+        const snapshot = { status: 'ready', writable: true, value }
+        return { getSnapshot: () => snapshot, subscribe: () => () => {} }
+      }
+      const forms = { 'chatgpt-siwc': form({ enableChatGptSearch: false }), web: form({ searchProvider: 'deepseek-official' }) }
       const remote = {
         async settings(action) {
           switch (action.type) {
@@ -42,14 +54,8 @@ await build({
               view = { ...view, accounts, active: id, confirmPlan: true }
               break
             case 'confirm':
-              view = { ...view, confirmPlan: false }
-              break
-            case 'reload':
               if (params.get('quota') === '1') return { ok: true, value: { ok: false, error: 'quota' } }
-              view = { ...view, models: [
-                { id: 'test-model-a', name: 'Fixture Reasoning' },
-                { id: 'test-model-b', name: 'Fixture Fast' },
-              ] }
+              view = { ...view, confirmPlan: false }
               break
             case 'logout':
               view = { ...view, accounts: [{ ...accounts[0], status: 'signedOut' }], active: null, models: null }
@@ -61,11 +67,15 @@ await build({
       window.__ModuleLoader__ = {
         load({ factory }) {
           const client = factory((id) => ({
-            react: React, 'react/jsx-runtime': jsxRuntime, '@deepseek-ai/dsh-client-ui-primitives': { Button, Tag },
+            react: React, 'react/jsx-runtime': jsxRuntime, '@deepseek-ai/dsh-client-ui-primitives': {
+              Button, Menu, Switch, Tag, Tooltip, IconCheckOutlineRegular, IconEllipsisOutlineRegular,
+              IconGlobeOutlineRegular, IconInfoOutlineRegular, IconPlusOutlineRegular,
+            },
           })[id])
           client.apply({
             remote: { async $mount() { return () => {} } },
-            get() { return remote },
+            get(name) { return name === 'configForms' ? { get: id => forms[id] } : remote },
+            inject() {},
             effect(register) { register() },
             locale: { register(_, value) { dictionaries = value } },
             slots: {

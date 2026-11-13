@@ -7,7 +7,7 @@ import { providerId } from '../identity.js'
 import type { AccountStatus, SettingsResult, SettingsView } from '../view.js'
 import { fetchCatalog } from './catalog.js'
 import type { CatalogModel } from './catalog.js'
-import { RetryRegistration, SiwcFault, hasPlan, identitySchema, tokenSchema } from './oauth.js'
+import { RetryRegistration, SiwcFault, accountDisplayName, hasPlan, identitySchema, tokenSchema } from './oauth.js'
 import type { OAuth } from './oauth.js'
 
 const idSchema = z.uuid()
@@ -52,8 +52,10 @@ function usable(account: Account | undefined): account is Account & { tokens: No
 }
 
 function clearTokens(account: Account, status: 'signedOut' | 'reauthorize', unknown = account.revocationUnknown) {
+  const name = accountDisplayName(account.identity, account.tokens)
   return grant({
-    version: account.version, identity: account.identity, generation: account.generation, status,
+    version: account.version, identity: { ...account.identity, ...(name ? { displayName: name } : {}) },
+    generation: account.generation, status,
     ...(unknown ? { revocationUnknown: true } : {}),
   })
 }
@@ -127,8 +129,8 @@ export class Accounts {
       const status: AccountStatus = this.uncertainRefreshes.get(id) === account.generation ? 'reauthorize'
         : account.status === 'signingOut' ? 'signedOut'
         : account.status === 'connected' && !usable(account) ? 'identityOnly' : account.status
-      const suffix = id.slice(0, 6)
-      return { id, label: (account.identity.label ?? 'ChatGPT') + ' · ' + suffix, status, generation: account.generation }
+      const name = accountDisplayName(account.identity, account.tokens)
+      return { id, ...(name ? { displayName: name } : {}), status, generation: account.generation }
     }))
     const activeAccount = accounts.find(account => account?.id === selection?.active && account?.status === 'connected')
     const active = activeAccount?.id ?? null
@@ -137,7 +139,7 @@ export class Accounts {
       available: this.api !== undefined,
       authorizing: this.pending !== undefined,
       accounts: accounts.flatMap(account => account
-        ? [{ id: account.id, label: account.label, status: account.status }] : []),
+        ? [{ id: account.id, ...(account.displayName ? { displayName: account.displayName } : {}), status: account.status }] : []),
       active,
       confirmPlan: active !== null && selection?.confirmed === false,
       models: cache && active === cache.id && cache.generation === activeAccount?.generation

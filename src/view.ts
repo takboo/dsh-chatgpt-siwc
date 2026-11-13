@@ -2,7 +2,7 @@ export type AccountStatus = 'connected' | 'identityOnly' | 'signedOut' | 'reauth
 
 export interface AccountView {
   id: string
-  label: string
+  displayName?: string
   status: AccountStatus
 }
 
