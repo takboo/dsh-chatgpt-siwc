@@ -20,11 +20,13 @@ try {
   assert.equal(manifest.engines.dsh, '0.2.2-rc.1')
   assert.equal(manifest.license, 'MIT')
 
-  const files = new Set(['LICENSE', 'README.md', 'package.json', 'locale/en.json', 'locale/zh.json'])
+  const files = new Set(['LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'package.json', 'locale/en.json', 'locale/zh.json'])
   for (const path of [manifest.dsh.bundle.patch, manifest.icon, ...Object.values(manifest.exports)]) {
     if (!path.includes('*')) files.add(posix.normalize(path))
   }
   assert.deepEqual(new Set(pack.files.map(({ path }) => path)), files)
+  const zodLicense = await readFile(new URL('../node_modules/zod/LICENSE', import.meta.url), 'utf8')
+  assert.ok(read('THIRD_PARTY_NOTICES.md').includes(zodLicense.trim()))
   for (const entry of [manifest.exports['.'], manifest.exports['./client'], manifest.exports['./typert']]) {
     assert.equal(read(posix.normalize(entry)), await readFile(entry, 'utf8'))
   }
