@@ -54,7 +54,11 @@
 
 ## 剩余目录字段
 
-2026-11-13 复核脱敏样本的 54 个字段。接入摘要参数后共采用 7 个字段。adapter 按所选模型的 `supports_reasoning_summary_parameter` 请求 `concise`，并借鉴同宿主实现处理摘要增量和终态。隔离 Desktop 上的 `gpt-6.1-sol` 在 `high` 和提供方默认下均先显示摘要，再显示正文。终态保持推理行数量，两组都通过同会话续聊。后续字段继续先核对同宿主和同路由开源实现。[Desktop 候选验收](../evidence/siwc-reasoning-summary-desktop-2026-11-13.md#流式摘要候选包验收) · [开源对照](responses-protocol-comparison.md#推理摘要的开源实现) · [其他字段](responses-protocol-comparison.md#图片接入后的剩余字段)
+2026-11-13 复核脱敏样本的 54 个字段。接入摘要参数后共采用 7 个字段。adapter 按所选模型的 `supports_reasoning_summary_parameter` 请求 `concise`，并借鉴同宿主实现处理摘要增量和终态。隔离 Desktop 上的 `gpt-6.1-sol` 在 `high` 和提供方默认下均先显示摘要，再显示正文。终态保持推理行数量，两组都通过同会话续聊。[Desktop 候选验收](../evidence/siwc-reasoning-summary-desktop-2026-11-13.md#流式摘要候选包验收) · [开源对照](responses-protocol-comparison.md#推理摘要的开源实现)
+
+同日的源码对照中，同宿主 `dsh-codex-subscription` 提供独立的速度、详略、图片细节和搜索来源选项，走 Codex 服务。Amplifier 给出了公开 SIWC 的托管搜索请求构造。判断是暂缓增加目录映射，有订阅搜索需求时优先实测搜索调用、引用显示和续聊。原图等出现可复现的识别问题再比较，速度档等公开路由的档位和额度影响明确后再评估。[字段优先级与源码证据](responses-protocol-comparison.md#流式摘要接入后的优先级)
+
+后续 Desktop 探针确认当前目录的 8 个可见模型都明确支持搜索。以 `gpt-6.1-sol` 实测，公开 SIWC 发出搜索调用与引用，使用流中的已完成项可在同一会话继续聊。搜索轮终态的 `output` 为空。后续若接入，需要处理流式搜索项与引用，保留已通过验收的续聊方式，并验证界面链接。[Desktop 托管搜索复测](../evidence/siwc-hosted-search-desktop-2026-11-13.md)
 
 ## 选择与取舍
 
