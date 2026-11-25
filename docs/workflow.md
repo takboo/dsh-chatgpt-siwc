@@ -2,6 +2,8 @@
 
 本仓库通过[基座锁](../dsh-engineering.lock.json)固定 `dsh-plugin-engineering` 版本，以根目录 [`mise.toml`](../mise.toml) 作为唯一验证入口。
 
+**`Verification is all you need`**（验证总纲）：不靠口头担保或对话记忆，凡可机械验证的不变量与回归模式均固化为自动化门禁与测试；验证统一走 `mise` 固定运行时与标准入口，按 `E0`–`E4` 诚实分级，并以同一份候选 `.tgz` 摘要串联 `E1` 与 `E2`/`E3`。
+
 ## 运行时与基座准备
 
 1. 安装锁定运行时并信任配置：`mise trust && mise install`（要求 `mise >= 2026.10.2`，锁定 `node = "24.22.2"`）。
@@ -47,5 +49,7 @@
 
 ## 交付规则
 
+- **文档分层与退场**：遵循 EGM 磁盘真相，根目录 `README.md` 保持对外产品视角与既定语种；新增 L2 阶段计划（`docs/plans/`）须附单行退场条件并在收官后删除，新增 L3 探索 RFC（`docs/design/rfc-*.md`）须在前 20 行标注 `EXPLORATORY / UNVERIFIED` 并附退场规则。
+- **独立只读复核与受控交付**：遵循 YAGNI 先做减法，提交前经独立只读复核收敛（复核方只读代码、diff 与验证产物，不直接修改文件）；未经明确授权不自动 `git push`、不打版本 tag，也不越权修改其他仓库。
 - 改动模型协议、OAuth 或凭据前同步核对[实施方案](architecture.md)、[安全设计](security.md)与[验收标准](acceptance.md)。
 - 原子提交、中文提交信息与暂存审阅规则见[接手入口](../AGENTS.md#git-提交)；验收取证与脱敏要求见[证据索引](evidence/README.md)。
