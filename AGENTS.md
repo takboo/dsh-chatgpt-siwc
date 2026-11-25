@@ -2,6 +2,7 @@
 
 先读 [文档索引](docs/README.md)，再按任务读取对应契约。
 
+- 本仓库继承[基座锁](dsh-engineering.lock.json)固定版本的基座契约（`locked-run.mjs docs docs/engineering-contract.md`）跨插件共享治理原则：**`Verification is all you need`**、EGM 磁盘真相与产品 `README.md` 保护、YAGNI、独立只读复核，以及未经明确授权不自动 `git push` 或打 tag（不在此复述全文，下文仅列本插件专属边界）。
 - 工程接入、日常门禁、宿主验证或取证前，先读[工作流与验证门禁](docs/workflow.md)，按[基座锁](dsh-engineering.lock.json)通过 `mise run check` / `mise run verify:host` 与 `locked-run.mjs`（`doctor`、`docs`、`check-plugin`、`container`、`tart`）核对并执行。普通 Web 回归使用 Linux 容器内的固定 Chromium。
 - 实施前核对[计划](docs/implementation-plan.md)的阶段门和[验收入口](docs/acceptance.md)的适用版本、复跑命令及证据。
 - 改动模型协议、OAuth 或凭据时读[实施方案](docs/architecture.md)和[安全设计](docs/security.md)，同步相应验收用例。
