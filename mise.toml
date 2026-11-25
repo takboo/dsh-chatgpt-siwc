@@ -1,0 +1,52 @@
+min_version = "2026.10.2"
+
+[tools]
+node = "24.22.2"
+
+[env]
+DSH_BASE_DIR = '{% set env_dir = get_env(name="DSH_ENGINEERING_CHECKOUT", default="") %}{% set xdg = get_env(name="XDG_CONFIG_HOME", default="") %}{% if xdg == "" %}{% set xdg = get_env(name="HOME", default="") ~ "/.config" %}{% endif %}{% set cfg = xdg ~ "/dsh-plugin-engineering/checkout" %}{% if env_dir != "" %}{{ env_dir }}{% elif cfg is file %}{{ read_file(path=cfg) | trim }}{% else %}../dsh-plugin-engineering{% endif %}'
+DSH_VERIFY_HOST_DIR = 'artifacts/verify-host/run-{{ now(utc=true) | date(format="%Y%m%dT%H%M%S") }}-{{ get_random(start=100000, end=999999) }}-{{ get_random(start=100000, end=999999) }}'
+
+[tasks.setup]
+description = "Install locked npm dependencies into workspace"
+run = 'npm --cache "$PWD/npm-cache" ci --ignore-scripts --no-audit --no-fund'
+
+[tasks.lint]
+description = "Run ESLint"
+run = "npm run lint"
+
+[tasks.typecheck]
+description = "Run TypeScript type checking"
+run = "npm run typecheck"
+
+[tasks.build]
+description = "Build host, client, and typert bundles"
+run = "npm run build"
+
+[tasks.test]
+description = "Run P1/P2/P3 offline tests against built bundles"
+depends = ["build"]
+run = "node --test --test-timeout=15000 test/p1/*.test.mjs test/p2/*.test.mjs test/p3/*.test.mjs"
+
+[tasks."check:pack"]
+description = "Pack tarball and verify E1 package metadata"
+depends = ["build"]
+run = "npm run check:pack"
+
+[tasks."check:shell"]
+description = "Run locked dsh-plugin-engineering plugin shell check"
+run = 'node "${DSH_BASE_DIR}/scripts/locked-run.mjs" check-plugin'
+
+[tasks.check]
+description = "Run full E0/E1 verification gate"
+depends = ["check:shell", "lint", "typecheck", "test", "check:pack"]
+
+[tasks."verify:pack"]
+description = "Pack and stage E1-verified candidate tarball for host verification"
+depends = ["build"]
+run = 'npm run check:pack -- --stage-host "$DSH_VERIFY_HOST_DIR"'
+
+[tasks."verify:host"]
+description = "Run locked Linux container host verification (CLI + Web)"
+depends = ["verify:pack"]
+run = 'node "${DSH_BASE_DIR}/scripts/locked-run.mjs" container all test/p2/host-targets.json test/p2/host-probe.mjs "${DSH_VERIFY_HOST_DIR}/candidate.tgz" HEAD "${DSH_VERIFY_HOST_DIR}/report.json"'
