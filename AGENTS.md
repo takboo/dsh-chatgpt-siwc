@@ -2,7 +2,7 @@
 
 先读 [文档索引](docs/README.md)，再按任务读取对应契约。
 
-- 工程接入、宿主验证或取证前，按[基座锁](dsh-engineering.lock.json)核对本机 checkout 的 origin、tag 和 SHA，从锁定提交读取 `.agents/skills/dsh-plugin-onboarding/SKILL.md`。普通 Web 回归使用 Linux 容器内的固定 Chromium。
+- 工程接入、日常门禁、宿主验证或取证前，先读[工作流与验证门禁](docs/workflow.md)，按[基座锁](dsh-engineering.lock.json)通过 `mise run check` / `mise run verify:host` 与 `locked-run.mjs`（`doctor`、`docs`、`check-plugin`、`container`、`tart`）核对并执行。普通 Web 回归使用 Linux 容器内的固定 Chromium。
 - 实施前核对[计划](docs/implementation-plan.md)的阶段门和[验收入口](docs/acceptance.md)的适用版本、复跑命令及证据。
 - 改动模型协议、OAuth 或凭据时读[实施方案](docs/architecture.md)和[安全设计](docs/security.md)，同步相应验收用例。
 - 研究、依赖或准入判断变化时更新[可行性](docs/research/feasibility.md)，保留主源、日期及事实／推论／待实测的区分。

@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { copyFile, lstat, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { parse } from 'yaml'
+
+let stageHostDir = null
+for (let i = 2; i < process.argv.length; i += 1) {
+  const arg = process.argv[i]
+  if (arg === '--stage-host' && stageHostDir === null && process.argv[i + 1] && !process.argv[i + 1].startsWith('-')) {
+    stageHostDir = process.argv[++i]
+  } else {
+    console.error('Usage: node scripts/check-pack.mjs [--stage-host <dir>]')
+    process.exit(2)
+  }
+}
 
 const temporary = await mkdtemp(join(tmpdir(), 'dsh-siwc-pack-'))
 try {
@@ -42,6 +54,15 @@ try {
   await mkdir(destination, { recursive: true })
   const output = join(destination, pack.filename)
   await copyFile(tarball, output)
+  if (stageHostDir) {
+    await mkdir(stageHostDir, { recursive: true })
+    const stagedReport = join(stageHostDir, 'report.json')
+    const existingReport = await lstat(stagedReport).catch((e) => (e.code === 'ENOENT' ? null : Promise.reject(e)))
+    if (existingReport) throw new Error(`Refusing to reuse staging directory with existing report: ${stagedReport}`)
+    const stagedTarball = join(stageHostDir, 'candidate.tgz')
+    await copyFile(tarball, stagedTarball, constants.COPYFILE_EXCL)
+    console.log(`Staged ${stagedTarball}`)
+  }
   console.log(`${output}\nSHA-256 ${hash}`)
 } finally {
   await rm(temporary, { recursive: true, force: true })

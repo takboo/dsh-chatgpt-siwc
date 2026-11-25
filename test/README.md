@@ -46,31 +46,30 @@
 
 ## P3 离线 Responses
 
-在根目录执行 `npm test`，或构建后执行 `node --test --test-timeout=15000 test/p3/*.test.mjs`。测试通过已发布的 DSH LLM runtime 和合成 OAuth 驱动打包适配器，捕获实际 SDK HTTP 请求并用 SSE fixture 回应。覆盖文本、用量、namespace function 的两轮交换、重建 adapter 后回放、异常终态和取消。[首轮证据](../docs/evidence/p3-offline-2026-11-11.md)记录观察范围。
+在根目录执行 `mise run test`（或 `npm test`），也可在构建后直接执行 `node --test --test-timeout=15000 test/p3/*.test.mjs`。测试通过已发布的 DSH LLM runtime 和合成 OAuth 驱动打包适配器，捕获实际 SDK HTTP 请求并用 SSE fixture 回应。覆盖文本、用量、namespace function 的两轮交换、重建 adapter 后回放、异常终态和取消。[首轮证据](../docs/evidence/p3-offline-2026-11-11.md)记录观察范围。
 
 ## P3 隔离宿主验证
 
-从干净候选提交构建一次并运行 `npm run check:pack`，将产物绝对路径赋给 `artifact`。未提交的候选可先保存为独立临时 Git 快照。将已核对的基座 checkout 路径赋给 `base_checkout`。原生探针核对 checkout 的 origin、tag 与 SHA，从锁定基座读取 Node 镜像，预取锁定 npm 依赖后在断网、只读根文件系统的容器中运行。探针从 tarball 解出 Host 入口，并在容器临时目录创建合成凭据、工作区和 JSONL 会话。
+从干净候选提交执行 `mise run build && mise run check:pack`（或 `mise run verify:pack`），将产物绝对路径赋给 `artifact`。未提交的候选可先保存为独立临时 Git 快照。将已核对的基座 checkout 路径赋给 `DSH_ENGINEERING_CHECKOUT`（与 `$base_checkout` 一致）。原生探针核对 checkout 的 origin、tag 与 SHA，从锁定基座读取 Node 24 镜像，预取锁定 npm 依赖后在断网、只读根文件系统的容器中运行。探针从 tarball 解出 Host 入口，并在容器临时目录创建合成凭据、工作区和 JSONL 会话。
 
 ```sh
 bash test/p3/run-native.sh "$base_checkout" "$artifact"
-bash "$base/scripts/run-container.sh" cli test/p2/host-targets.json \
-  test/p2/host-probe.mjs "$artifact" "$(git rev-parse HEAD)" "$work/cli-report.json"
+mise exec -- sh -c 'node "$DSH_BASE_DIR/scripts/locked-run.mjs" container cli test/p2/host-targets.json test/p2/host-probe.mjs "$1" HEAD "$2"' _ "$artifact" "$work/cli-report.json"
 ```
 
-第二条命令的 `base` 为按下文导出的锁定基座，`work` 为现有的临时报告目录。CLI 复核候选包的实际安装、卸载和旧版拒绝。断网容器执行整套 P3 探针，使用官方 Host 的 Agent、审批、文件沙箱、压缩、重试、JSONL 和 Loader。压缩摘要走独立的合成模型路由。原生生命周期测试通过 Loader 移除并重新挂载 fixture 入口，入口调用候选包的 Host 装配函数。
+第二条命令中 `$work` 为现有的临时报告目录（也可直接用 `mise run verify:host` 一次完成打包暂存与 CLI + Web 容器回归）。CLI 复核候选包的实际安装、卸载和旧版拒绝。断网容器执行整套 P3 探针，使用官方 Host 的 Agent、审批、文件沙箱、压缩、重试、JSONL 和 Loader。压缩摘要走独立的合成模型路由。原生生命周期测试通过 Loader 移除并重新挂载 fixture 入口，入口调用候选包的 Host 装配函数。
 
 ## P2 离线账号和界面
 
-按 [P1 包骨架](#p1-包骨架)安装锁定依赖。在根目录构建后运行 `node --test --test-timeout=15000 test/p2/*.test.mjs`，核对 loopback、合成签名、实际本地 backing、DSH Typert 和目录。替身传输只接受测试中的固定端点。
+按 [P1 包骨架](#p1-包骨架)安装锁定依赖。在根目录执行 `mise run build` 后运行 `mise exec -- node --test --test-timeout=15000 test/p2/*.test.mjs`，核对 loopback、合成签名、实际本地 backing、DSH Typert 和目录。替身传输只接受测试中的固定端点。
 
 设置页的浏览器 fixture 使用同一份构建和锁定 DSH 源码中的原生控件与主题 token。准备下方配置检查所用的 DSH 源码，赋值给 `dsh_source`，再从根目录执行：
 
 ```sh
 p2_ui_dir=$(mktemp -d)
-node test/p2/browser-fixture.mjs "$dsh_source" "$p2_ui_dir"
+mise exec -- node test/p2/browser-fixture.mjs "$dsh_source" "$p2_ui_dir"
 cp test/p2/browser-check.mjs "$p2_ui_dir/"
-npm --prefix "$p2_ui_dir" --cache "$p2_ui_dir/npm-cache" install --ignore-scripts --no-audit --no-fund --save-exact playwright@1.56.1
+mise exec -- npm --prefix "$p2_ui_dir" --cache "$p2_ui_dir/npm-cache" install --ignore-scripts --no-audit --no-fund --save-exact playwright@1.56.1
 docker run --rm --network none --shm-size=1g \
   -v "$p2_ui_dir:/fixture" \
   mcr.microsoft.com/playwright:v1.56.1-noble@sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2b837a \
@@ -81,12 +80,13 @@ docker run --rm --network none --shm-size=1g \
 
 ## P2 隔离宿主
 
-从[工程锁](../dsh-engineering.lock.json)核对基座 checkout 的 origin、tag 和 SHA，并导出锁定提交到临时目录 `base`。在 `base/.engineering-revision` 写入完整 SHA。按下方命令构建并检查一次 tarball，将绝对路径赋给 `artifact`。两个宿主使用同一 tarball。用干净的候选提交运行：
+按[工作流与验证门禁](../docs/workflow.md)配置 `DSH_ENGINEERING_CHECKOUT`（或 `~/.config/dsh-plugin-engineering/checkout`）并运行 `locked-run.mjs doctor` 核对[工程锁](../dsh-engineering.lock.json)。正式 `E2` 取证必须从干净的候选提交开始（`git status` 无未提交源码改动），因为 `build` 读取当前工作树而报告中的 `sourceCommit` 取自 `HEAD`。日常 Linux 容器宿主回归（CLI + 固定 Chromium Web）直接执行：
 
 ```sh
-bash "$base/scripts/run-container.sh" all test/p2/host-targets.json \
-  test/p2/host-probe.mjs "$artifact" "$(git rev-parse HEAD)" "$work/web-report.json"
+mise run verify:host
 ```
+
+该任务按严格串行 DAG 执行 `build` → `verify:pack`（将已通过 E1 元数据校验的 tarball 独占暂存至每轮独立的 `artifacts/verify-host/run-*/candidate.tgz`）→ `locked-run.mjs container all test/p2/host-targets.json test/p2/host-probe.mjs "$DSH_VERIFY_HOST_DIR/candidate.tgz" HEAD "$DSH_VERIFY_HOST_DIR/report.json"`。如需指定其他候选包或报告路径，可直接调用 `locked-run.mjs container`。
 
 macOS ARM64 Desktop 使用同一基座的共享 Tart 实验室。准备仅供本轮的 `inputs` 目录，放入：
 
@@ -97,31 +97,28 @@ macOS ARM64 Desktop 使用同一基座的共享 Tart 实验室。准备仅供本
 
 ```sh
 (cd "$inputs" && shasum -a 256 *.tgz *.mjs *.zip pnpm.tar > SHA256SUMS)
-DSH_TART_INPUTS="$inputs" bash "$base/scripts/run-tart.sh" --tart-home "$lab" \
-  run test/p2/desktop-guest.sh
+DSH_TART_INPUTS="$inputs" mise exec -- sh -c 'node "$DSH_BASE_DIR/scripts/locked-run.mjs" tart --tart-home "$1" run test/p2/desktop-guest.sh' _ "$lab"
 ```
 
 来宾核对签名、版本和输入摘要，在隔离 profile 经官方图形插件管理器安装、启用并打开设置，然后重启应用复查。环境报告记录镜像、来宾系统、候选包摘要和回收结果。此入口验证默认离线构建。合成账号流程与真实账号验证分别取证。
 
 ## P1 包骨架
 
-从项目根目录用 Node `26.13.0`、npm `11.20.0` 复跑。依赖只安装在此工作区。测试使用隔离 Cordis composition、Client factory 测试替身及临时 credentials backing。
+从项目根目录使用 [`mise.toml`](../mise.toml) 锁定的 Node `24.22.2`（`mise >= 2026.10.2`）复跑；依赖只安装在此工作区。测试使用隔离 Cordis composition、Client factory 测试替身及临时 credentials backing。
 
 ```sh
-npm --cache "$PWD/npm-cache" ci --ignore-scripts --no-audit --no-fund
-npm run lint
-npm run typecheck
-npm test
-npm run check:pack
+mise install
+mise run setup
+mise run check
 ```
 
-`npm test` 构建 Host 与 Client 入口后运行探针。也可以单独运行 `npm run build`。包校验核对真实 tarball 的入口、patch、双语资源、图标、许可及文件清单，保存在 `artifacts/pack/<SHA-256>/`。
+`mise run check` 统一串联 `check:shell`（`locked-run.mjs check-plugin`）、`lint`、`typecheck`、`test` 与 `check:pack`；也可按需单独运行 `mise run build`、`mise run test` 或 `mise run check:pack`。包校验核对真实 tarball 的入口、patch、双语资源、图标、许可及文件清单，保存在 `artifacts/pack/<SHA-256>/`。
 
-可从 [DSH 固定提交](https://github.com/deepseek-ai/deepseek-harness/tree/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db) 准备源码，执行 `npm run check:profile -- <源码目录>`。此检查使用上游合成器，核对 Web 和 Desktop 共用的 bundle 层、title 及四个 preset 的 compaction 配置。宿主安装与运行另行验证。
+可从 [DSH 固定提交](https://github.com/deepseek-ai/deepseek-harness/tree/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db) 准备源码，执行 `mise exec -- npm run check:profile -- <源码目录>`。此检查使用上游合成器，核对 Web 和 Desktop 共用的 bundle 层、title 及四个 preset 的 compaction 配置。宿主安装与运行另行验证。
 
 ## P0 离线核对
 
-从项目根目录复跑。使用 Node `26.13.0` 与 npm `11.20.0`，按 `test/p0/package-lock.json` 预取公开服务包和 SDK 到临时目录，再以空环境执行 fixture。所有推理／目录响应由合成 `fetch` 提供，凭据写入本次临时文件。
+从项目根目录复跑。历史首轮取证使用 Node `26.13.0` 与 npm `11.20.0`（当前工作区日常工具链已统一至 `mise` 锁定的 Node `24.22.2`），按 `test/p0/package-lock.json` 预取公开服务包和 SDK 到临时目录，再以空环境执行 fixture。所有推理／目录响应由合成 `fetch` 提供，凭据写入本次临时文件。
 
 ```sh
 (
